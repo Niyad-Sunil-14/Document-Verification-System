@@ -4,8 +4,8 @@ import axiosInstance from '../../api/Axiosinstance';
 import { Link, useNavigate } from 'react-router';
 
 const Register = () => {
-  const [serverError, setServerError] = useState(""); // State for backend errors
-  const [isSuccess, setIsSuccess] = useState(false); // State for success message
+  const [serverError, setServerError] = useState("");
+  const [isSuccess, setIsSuccess] = useState(false); 
 
   const { 
     register, 
@@ -18,7 +18,7 @@ const Register = () => {
   const password = watch("password", "");
 
   const onSubmit = async (data) => {
-    setServerError(""); // Clear previous errors
+    setServerError("");
     try {
       await axiosInstance.post('auth/register/', {
         email: data.email,
@@ -31,9 +31,7 @@ const Register = () => {
       setTimeout(() => navigate('/login'), 2000);
       
     } catch (err) {
-      // Check if the backend sent a specific error message
       if (err.response && err.response.data) {
-        // Django/FastAPI usually send errors in 'detail' or 'message'
         const backendMessage = err.response.data.detail || err.response.data.message;
         setServerError(backendMessage || "This email is already registered.");
       } else {
@@ -46,7 +44,6 @@ const Register = () => {
     <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
       <div className="bg-white rounded-3xl shadow-2xl flex flex-col md:flex-row max-w-4xl w-full overflow-hidden min-h-[600px]">
         
-        {/* Left Side: Illustration */}
         <div className="md:w-1/2 bg-[#f2eafa] flex items-center justify-center p-8">
           <img 
             src="/login.png" 
@@ -55,20 +52,17 @@ const Register = () => {
           />
         </div>
 
-        {/* Right Side: Form Area */}
         <div className="md:w-1/2 bg-white p-10 flex flex-col justify-center">
           <h2 className="text-2xl font-bold text-gray-900 text-center mb-6">Create Account</h2>
           
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             
-            {/* Server-Side Error Message */}
             {serverError && (
               <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm font-medium animate-pulse">
                 {serverError}
               </div>
             )}
 
-            {/* Success Message */}
             {isSuccess && (
               <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded-lg text-sm font-medium">
                 Account created! Redirecting to login...
@@ -98,12 +92,10 @@ const Register = () => {
                 }`}
               />
               
-              {/* Client-side validation error */}
               {errors.email && (
                 <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.email.message}</p>
               )}
 
-              {/* Backend "Email Exists" error */}
               {serverError && serverError.toLowerCase().includes('email') && (
                 <div className="flex items-center gap-1 mt-1 ml-1 text-red-600">
                   <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
