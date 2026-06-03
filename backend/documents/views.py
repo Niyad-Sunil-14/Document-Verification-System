@@ -45,3 +45,21 @@ class DocumentUploadView(APIView):
             )
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+
+class DocumentListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        # 1. Isolate Data: Admin sees all records, regular user sees only their own
+        if request.user.is_staff:
+            documents = Document.objects.all()
+        else:
+            documents = Document.objects.filter(user=request.user)
+        
+        # 2. Serialize: Pass the request context so our custom __init__ method 
+        # can automatically hide 'extracted_text' from regular users!
+        serializer = DocumentListSerializer(documents, many=True, context={'request': request})
+        
+        return Response(serializer.data, status=status.HTTP_200_OK)
