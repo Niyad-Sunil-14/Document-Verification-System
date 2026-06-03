@@ -22,10 +22,9 @@ def user_directory_path(instance, filename):
 class Document(models.Model):
 
     STATUS_CHOICES = [
-        ('PENDING', 'Pending Processing'),
-        ('PROCESSING', 'OCR Processing Running'),
-        ('COMPLETED', 'Success'),
-        ('FAILED', 'OCR Process Failed'),
+        ('PENDING', 'Pending Review'),
+        ('APPROVED', 'Approved by Admin'),
+        ('REJECTED', 'Rejected / Invalid'),
     ]
 
     user = models.ForeignKey(CustomUser,on_delete=models.CASCADE,related_name='documents')
