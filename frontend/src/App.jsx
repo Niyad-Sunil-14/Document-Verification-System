@@ -7,6 +7,7 @@ import Dashboard from './components/pages/user/Dashboard';
 import AdminDashboard from './components/pages/admin/AdminDashboard';
 import ForgotPassword from './components/auth/ForgotPassword';
 import ProtectedRoute from './routes/ProtectedRoute';
+import Home from './components/pages/Home';
 
 function App() {
 
@@ -14,6 +15,7 @@ function App() {
     <>
       <BrowserRouter>
         <Routes>
+          <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register/>} />
           <Route path='/admin-login' element={<AdminLogin/>}/>
