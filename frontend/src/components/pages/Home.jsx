@@ -21,7 +21,7 @@ export default function Home() {
             
             {/* Logo */}
             <div className="flex items-center gap-1">
-              <img src="/home1.png" alt="icon" className="w-full h-auto object-contain max-w-[42px]"/>
+              <img src="/logo.png" alt="icon" className="w-full h-auto object-contain max-w-[42px]"/>
               <span className="text-xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 text-transparent bg-clip-text">
                 DocVerify
               </span>
