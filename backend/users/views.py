@@ -106,3 +106,18 @@ class LogoutView(APIView):
             return Response({"message": "Successfully logged out."}, status=status.HTTP_205_RESET_CONTENT)
         except Exception as e:
             return Response({"error": "Invalid or expired token."}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+
+
+
+
+
+class UserProfileView(APIView):
+    # This blocks unauthorized users and forces DRF to look for the Bearer token
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        # request.user contains the authenticated user instance mapped by the JWT
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)

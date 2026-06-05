@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import axiosInstance from '../../../api/Axiosinstance';
+import UserDashboard from './Dashboard';
+import { Link } from 'react-router';
 
 export default function Navbar() {
   // Mock Global Auth States (Swap with your active Context/Redux states later)
-  const [user, setUser] = useState({
-    username: 'Harsh_26',
-    email: 'harsh@docverify.com',
-    isStaff: true, // Kept to display the admin role tag if needed
-  });
-
+  const [user, setUser] = useState();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  
   // UI Open/Close Toggles
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -21,6 +22,25 @@ export default function Navbar() {
         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
     }`;
   };
+
+  useEffect(()=>{
+    const fetchUserProfile = async () => {
+      try {
+        setLoading(true);
+        // Hits your Django endpoint (e.g., users/me/ or users/profile/)
+        const response = await axiosInstance.get('users/profile/'); 
+        
+        setUser(response.data);
+      } catch (err) {
+        console.error("Profile fetching failed:", err);
+        setError(err.response?.data?.detail || 'Failed to establish connection to identity vault.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchUserProfile();
+  },[])
 
   return (
     <nav className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
@@ -39,7 +59,7 @@ export default function Navbar() {
             <div className="hidden md:flex space-x-6 h-full">
               <a href="#" className={getNavLinkClass(true)}>Dashboard</a>
               <a href="#" className={getNavLinkClass(false)}>My Documents</a>
-              <a href="#" className={getNavLinkClass(false)}>Upload Document</a>
+              <Link to='/upload' className={getNavLinkClass(false)}>Upload Document</Link>
               <a href="#" className={getNavLinkClass(false)}>Help & Support</a>
             </div>
           </div>
@@ -85,11 +105,10 @@ export default function Navbar() {
                 className="flex text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 items-center space-x-2 border border-slate-200 p-1.5 pr-3 hover:bg-slate-50 transition"
               >
                 <div className="w-8 h-8 rounded-lg bg-violet-600 text-white flex items-center justify-center font-bold text-sm uppercase shadow-sm">
-                  {user.username.charAt(0)}
+                  {user?.fullname.charAt(0)}
                 </div>
                 <div className="text-left hidden lg:block">
-                  <p className="text-xs font-bold text-slate-800 leading-tight">{user.username}</p>
-                  <p className="text-[10px] text-gray-400 font-medium leading-none">{user.isStaff ? 'Admin Panel' : 'Client Account'}</p>
+                  <p className="text-xs font-bold text-slate-800 leading-tight">{user?.username}</p>
                 </div>
                 <svg className={`w-4 h-4 text-gray-400 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -100,15 +119,15 @@ export default function Navbar() {
               {isProfileOpen && (
                 <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-xl shadow-lg bg-white ring-1 ring-black ring-opacity-5 border border-slate-100 py-1 z-50">
                   <div className="px-4 py-2.5 text-xs border-b border-slate-100 bg-slate-50/50">
-                    Active Account: <br /><strong className="text-slate-800 break-all">{user.email}</strong>
+                    Active Account: <br /><strong className="text-slate-800 break-all">{user?.email}</strong>
                   </div>
-                  <a href="#" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-semibold">Profile Overview</a>
+                  <a href="#" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-semibold">Profile</a>
                   <a href="#" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium">Account Settings</a>
                   <button 
                     onClick={() => alert('Sign-out routine executed')}
                     className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 font-bold border-t border-slate-100"
                   >
-                    Logout System
+                    Logout
                   </button>
                 </div>
               )}

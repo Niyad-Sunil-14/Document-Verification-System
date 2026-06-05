@@ -8,6 +8,7 @@ import AdminDashboard from './components/pages/admin/AdminDashboard';
 import ForgotPassword from './components/auth/ForgotPassword';
 import ProtectedRoute from './routes/ProtectedRoute';
 import Home from './components/pages/Home';
+import Upload from './components/pages/user/Upload';
 
 function App() {
 
@@ -20,18 +21,24 @@ function App() {
           <Route path="/register" element={<Register/>} />
           <Route path='/admin-login' element={<AdminLogin/>}/>
           <Route path='/forgot-password' element={<ForgotPassword/>}/>
+          
 
 
-
+          <Route path='/admin-dashboard' element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AdminDashboard/>
+              </ProtectedRoute>
+            }
+          />
           <Route path="/user-dashboard" element={
               <ProtectedRoute>
                 <Dashboard/>
               </ProtectedRoute>
             }
           />
-          <Route path='/admin-dashboard' element={
-              <ProtectedRoute allowedRoles={['ADMIN']}>
-                <AdminDashboard/>
+          <Route path='/upload' element={
+              <ProtectedRoute>
+                <Upload/>
               </ProtectedRoute>
             }
           />

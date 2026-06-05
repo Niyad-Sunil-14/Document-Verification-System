@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 import os
 from pathlib import Path
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -151,7 +152,19 @@ AUTH_USER_MODEL = 'users.CustomUser'
 
 
 
-
+SIMPLE_JWT = {
+    # Extend the short-lived access token (e.g., to 30 or 60 minutes)
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    
+    # Extend the refresh token session depth (e.g., to 7 or 14 days)
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    
+    # When a user gets a new access token, issue them a fresh brand new refresh token too!
+    'ROTATE_REFRESH_TOKENS': True,
+    
+    # Put old used refresh tokens on a blacklist to block reuse attacks
+    'BLACKLIST_AFTER_ROTATION': True,
+}
 
 
 CORS_ALLOWED_ORIGINS = [
