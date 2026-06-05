@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
+from . utils import extract_text_from_pdf
 
 from PIL import Image
 import pytesseract
@@ -23,20 +24,30 @@ class DocumentUploadView(APIView):
         if serializer.is_valid():
             # 1. Save document to storage. 'status' automatically sets to 'PENDING'
             document = serializer.save(user=request.user)
-            
-            # 2. Extract text silently in the background
+            file_path = document.file.path
+            text = ""
+
+            # 2. Extract text dynamically in the background based on file type
             try:
-                image = Image.open(document.file.path)
-                text = pytesseract.image_to_string(image)
+                if file_path.lower().endswith('.pdf'):
+                    # --- ROUTE A: PDF TEXT EXTRACTION ---
+                    logger.info(f"Processing digital PDF extraction for Document ID: {document.id}")
+                    text = extract_text_from_pdf(file_path)
+                else:
+                    # --- ROUTE B: IMAGE OCR SCANNING ---
+                    logger.info(f"Processing image Tesseract OCR for Document ID: {document.id}")
+                    image = Image.open(file_path)
+                    text = pytesseract.image_to_string(image)
                 
-                # If text is found, append it to the document
-                document.extracted_text = text
-                document.save()
+                # If text is found, append it to the document database entry
+                if text:
+                    document.extracted_text = text.strip()
+                    document.save()
                 
-            except Exception as ocr_error:
-                # If OCR fails, we log it on the server console for developers to see,
-                # but we DO NOT throw a 500 error or disrupt the user's upload flow.
-                logger.error(f"Silent OCR text extraction failed: {ocr_error}")
+            except Exception as processing_error:
+                # If extraction fails completely, we log it for debugging
+                # but DO NOT disrupt the user's frontend upload flow.
+                logger.error(f"Silent text extraction/OCR failed for Document {document.id}: {processing_error}")
             
             # 3. Return the full document payload back to React
             return Response(
@@ -45,7 +56,6 @@ class DocumentUploadView(APIView):
             )
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
 
 
 class DocumentListView(APIView):
