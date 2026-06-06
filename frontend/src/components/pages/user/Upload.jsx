@@ -66,7 +66,7 @@ export default function Upload() {
         },
       });
 
-      setMessage({ text: '🎉 Document uploaded successfully and queued for tracking logs!', isError: false });
+      setMessage({ text: 'Document uploaded successfully!', isError: false });
       setFile(null); 
 
       setTimeout(() => {
@@ -220,10 +220,9 @@ export default function Upload() {
                 {isUploading ? (
                   <>
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
-                    <span>Analyzing Payload Metrics & Extrapolating OCR...</span>
                   </>
                 ) : (
-                  <span>📤 Initialize Processing Sequence</span>
+                  <span>Upload</span>
                 )}
               </button>
             </div>

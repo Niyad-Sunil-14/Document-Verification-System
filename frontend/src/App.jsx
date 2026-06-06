@@ -9,6 +9,7 @@ import ForgotPassword from './components/auth/ForgotPassword';
 import ProtectedRoute from './routes/ProtectedRoute';
 import Home from './components/pages/Home';
 import Upload from './components/pages/user/Upload';
+import MyDocument from './components/pages/user/MyDocument';
 
 function App() {
 
@@ -39,6 +40,12 @@ function App() {
           <Route path='/upload' element={
               <ProtectedRoute>
                 <Upload/>
+              </ProtectedRoute>
+            }
+          />
+          <Route path='/documents' element={
+              <ProtectedRoute>
+                <MyDocument/>
               </ProtectedRoute>
             }
           />
