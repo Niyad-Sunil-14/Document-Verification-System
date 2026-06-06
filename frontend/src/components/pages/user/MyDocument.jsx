@@ -21,7 +21,6 @@ export default function MyDocument() {
         setLoading(true);
         setError('');
         
-        // Hits your Django list endpoint
         const response = await axiosInstance.get('documents/list');
         setDocuments(response.data);
       } catch (err) {
@@ -37,10 +36,8 @@ export default function MyDocument() {
 
   // 3. LIVE FILTER & SEARCH LOGIC
   const filteredDocuments = documents.filter((doc) => {
-    // Match Status Filter Tab
     const matchesStatus = filterStatus === 'ALL' || doc.status === filterStatus;
     
-    // Match Search Query (Searches filename or document classification type)
     const matchesSearch = 
       doc.filename.toLowerCase().includes(searchQuery.toLowerCase()) ||
       doc.document_type.toLowerCase().includes(searchQuery.toLowerCase());
@@ -58,6 +55,13 @@ export default function MyDocument() {
     return `px-2.5 py-1 rounded-full text-xs font-bold border ${badges[status] || badges.PENDING}`;
   };
 
+  // 🔥 4. ROUTER NAVIGATION ACTION
+  const viewDetail = (id) => {
+    // Matches the path parameter setup for your details page view
+    // Update the string path below to match your exact App.jsx route configuration (e.g. `/documents/${id}`)
+    navigate(`/documents/${id}`);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50/50 text-slate-900 font-sans antialiased">
       <Navbar />
@@ -68,14 +72,8 @@ export default function MyDocument() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">My Documents</h1>
-            <p className="text-gray-500 mt-1">Review, search, and manage your complete historical storage queue archive.</p>
+            <p className="text-gray-500 mt-1">Review, search, and manage your complete document history.</p>
           </div>
-          <Link 
-            to="/upload" 
-            className="inline-flex items-center justify-center px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm rounded-xl shadow-md shadow-violet-200/50 transition active:scale-[0.98] text-center"
-          >
-            ➕ Upload New File
-          </Link>
         </div>
 
         {/* CONTROLS BAR: SEARCH INPUT & STATUS FILTER SEGMENTS */}
@@ -114,17 +112,14 @@ export default function MyDocument() {
 
         {/* MAIN DATA FEED OUTPUT PORTAL */}
         {loading ? (
-          /* Loading Graphic State */
           <div className="flex justify-center items-center min-h-[350px]">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-violet-600" />
           </div>
         ) : error ? (
-          /* Network Failure Display Screen */
           <div className="p-6 bg-rose-50 border border-rose-200 text-rose-700 font-semibold rounded-2xl max-w-md mx-auto text-center">
             ⚠️ {error}
           </div>
         ) : filteredDocuments.length === 0 ? (
-          /* Zero Results Empty View Boundary */
           <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center max-w-xl mx-auto shadow-sm">
             <span className="text-5xl block mb-4">📂</span>
             <h3 className="text-lg font-bold text-slate-900">No Documents Found</h3>
@@ -137,7 +132,6 @@ export default function MyDocument() {
             </button>
           </div>
         ) : (
-          /* Standard Documents Data Grid Output */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredDocuments.map((doc) => (
               <div 
@@ -149,7 +143,7 @@ export default function MyDocument() {
                   <div className="flex items-start justify-between space-x-2">
                     <div className="flex items-center space-x-3 truncate">
                       <span className="text-3xl flex-shrink-0">
-                        {doc.filename.lower?.().endswith('.pdf') ? '📕' : '📄'}
+                        {doc.filename?.toLowerCase().endsWith('.pdf') ? '📕' : '📄'}
                       </span>
                       <div className="truncate">
                         <h3 className="text-sm font-bold text-slate-900 truncate max-w-xs" title={doc.filename}>
@@ -173,14 +167,15 @@ export default function MyDocument() {
                 </div>
 
                 {/* Lower Action Row Footer Toolbar */}
-                <div className="bg-slate-50 border-t border-slate-100 px-5 py-3 flex items-center justify-between text-xs font-bold">
-                  <span className="text-gray-400">OCR Scanned</span>
-                  <button 
-                    onClick={() => alert(`Reviewing exhaustive OCR parameters for document instance item index ID: ${doc.id}`)}
-                    className="text-violet-600 hover:text-violet-800 transition flex items-center space-x-1"
-                  >
-                    <span>View Analysis Details</span> <span>→</span>
-                  </button>
+                <div className="bg-slate-50 border-t border-slate-100 px-5 py-3 flex justify-center items-center text-xs font-bold">
+                    {/* 🔥 CHANGED: Wrapped viewDetail in an arrow function to prevent crash loops */}
+                    <button 
+                        onClick={() => viewDetail(doc.id)}
+                        className="text-violet-600 hover:text-violet-800 transition flex items-center space-x-1 cursor-pointer"
+                    >
+                        <span>View Analysis Details</span> 
+                        <span>→</span>
+                    </button>
                 </div>
               </div>
             ))}

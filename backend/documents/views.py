@@ -4,12 +4,13 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from . utils import extract_text_from_pdf
+from rest_framework.generics import RetrieveAPIView
 
 from PIL import Image
 import pytesseract
 import logging
 
-from .serializers import DocumentUploadSerializer, DocumentListSerializer
+from .serializers import DocumentUploadSerializer, DocumentListSerializer,DocumentDetailSerializer
 from .models import Document
 
 logger = logging.getLogger(__name__)
@@ -73,3 +74,14 @@ class DocumentListView(APIView):
         serializer = DocumentListSerializer(documents, many=True, context={'request': request})
         
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+class DocumentDetailView(RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = DocumentDetailSerializer
+
+    def get_queryset(self):
+        # Admins can see ALL documents, normal users can only look up their own files!
+        if self.request.user.is_staff:
+            return Document.objects.all()
+        return Document.objects.filter(user=self.request.user)

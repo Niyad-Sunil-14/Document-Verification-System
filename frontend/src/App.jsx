@@ -10,6 +10,7 @@ import ProtectedRoute from './routes/ProtectedRoute';
 import Home from './components/pages/Home';
 import Upload from './components/pages/user/Upload';
 import MyDocument from './components/pages/user/MyDocument';
+import DocumentDetails from './components/pages/user/DocumentDetails';
 
 function App() {
 
@@ -48,6 +49,12 @@ function App() {
                 <MyDocument/>
               </ProtectedRoute>
             }
+          />
+          <Route path="/documents/:id" element={
+            <ProtectedRoute>
+              <DocumentDetails/>
+            </ProtectedRoute>
+          } 
           />
 
         </Routes>
