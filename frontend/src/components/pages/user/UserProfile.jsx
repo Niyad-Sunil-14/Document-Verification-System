@@ -163,7 +163,7 @@ export default function UserProfile() {
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Profile</h1>
-            <p className="text-gray-500 mt-1">Manage your identity profiles, credentials, and verification clearance nodes.</p>
+            <p className="text-gray-500 mt-1">View your account details, manage your login credentials, and check your security status.</p>
           </div>
           <button 
             onClick={() => navigate(-1)} 
@@ -289,7 +289,7 @@ export default function UserProfile() {
                         </button>
                       </div>
                     ) : (
-                      <span>Authentication Managed Server Side.</span>
+                      <span>&nbsp;</span>
                     )}
                   </div>
                 </form>
@@ -381,7 +381,7 @@ export default function UserProfile() {
                   </div>
 
                   {/* SECURITY ACTION BAR FOOTER */}
-                  <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex items-center justify-end">
+                  <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-center">
                     <button
                       type="submit"
                       disabled={isSaving}

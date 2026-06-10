@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
-from . utils import extract_text_from_pdf
+from . utils import extract_text_from_pdf,preprocess_image_for_ocr
 from rest_framework.generics import RetrieveAPIView
 
 from PIL import Image
@@ -28,17 +28,27 @@ class DocumentUploadView(APIView):
             file_path = document.file.path
             text = ""
 
-            # 2. Extract text dynamically in the background based on file type
+            # 2. Extract text dynamically based on file type
             try:
                 if file_path.lower().endswith('.pdf'):
                     # --- ROUTE A: PDF TEXT EXTRACTION ---
                     logger.info(f"Processing digital PDF extraction for Document ID: {document.id}")
                     text = extract_text_from_pdf(file_path)
                 else:
-                    # --- ROUTE B: IMAGE OCR SCANNING ---
-                    logger.info(f"Processing image Tesseract OCR for Document ID: {document.id}")
-                    image = Image.open(file_path)
-                    text = pytesseract.image_to_string(image)
+                    # --- ROUTE B: IMAGE OCR SCANNING (WITH CV2 PREPROCESSING) ---
+                    logger.info(f"Processing image preprocessing & Tesseract OCR for Document ID: {document.id}")
+                    
+                    # 🔥 Call your CV2 preprocessing engine function first
+                    processed_image = preprocess_image_for_ocr(file_path)
+                    
+                    if processed_image is not None:
+                        # Feed the optimized, crystal-clear image directly into Tesseract
+                        text = pytesseract.image_to_string(processed_image)
+                    else:
+                        # Fallback to standard raw image processing if CV2 fails to read the file
+                        logger.warning(f"CV2 preprocessing returned None for doc {document.id}. Falling back to raw image.")
+                        image = Image.open(file_path)
+                        text = pytesseract.image_to_string(image)
                 
                 # If text is found, append it to the document database entry
                 if text:
@@ -46,7 +56,7 @@ class DocumentUploadView(APIView):
                     document.save()
                 
             except Exception as processing_error:
-                # If extraction fails completely, we log it for debugging
+                # If extraction fails completely, log it for debugging
                 # but DO NOT disrupt the user's frontend upload flow.
                 logger.error(f"Silent text extraction/OCR failed for Document {document.id}: {processing_error}")
             

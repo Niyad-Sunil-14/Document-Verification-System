@@ -154,13 +154,12 @@ export default function UserDashboard() {
                 {filteredDocuments.length > 0 && (
                   <tr className="bg-slate-50/30 hover:bg-slate-50 transition-colors">
                     <td colSpan="5" className="px-6 py-3.5 text-center">
-                      <button
-                        onClick={() => alert("Navigating to comprehensive history queue...")}
+                      <Link to='/documents'
                         className="inline-flex items-center space-x-1.5 text-xs font-bold uppercase tracking-wider text-violet-600 hover:text-violet-700 transition-colors"
                       >
                         <span>View All Documents</span>
                         <span>→</span>
-                      </button>
+                      </Link>
                     </td>
                   </tr>
                 )}

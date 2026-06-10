@@ -123,12 +123,12 @@ export default function MyDocument() {
           <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center max-w-xl mx-auto shadow-sm">
             <span className="text-5xl block mb-4">📂</span>
             <h3 className="text-lg font-bold text-slate-900">No Documents Found</h3>
-            <p className="text-gray-400 text-sm mt-1">We couldn't locate any items matching your active search filters query parameters.</p>
+            <p className="text-gray-400 text-sm mt-1">We couldn't locate any items matching your active search filters.</p>
             <button 
               onClick={() => { setSearchQuery(''); setFilterStatus('ALL'); }}
               className="mt-5 text-xs font-bold text-violet-600 hover:underline"
             >
-              Reset Query Parameters
+              Reset Filters
             </button>
           </div>
         ) : (
