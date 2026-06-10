@@ -11,6 +11,7 @@ import Home from './components/pages/Home';
 import Upload from './components/pages/user/Upload';
 import MyDocument from './components/pages/user/MyDocument';
 import DocumentDetails from './components/pages/user/DocumentDetails';
+import UserProfile from './components/pages/user/UserProfile';
 
 function App() {
 
@@ -55,6 +56,12 @@ function App() {
               <DocumentDetails/>
             </ProtectedRoute>
           } 
+          />
+          <Route path='/profile' element={
+              <ProtectedRoute>
+                <UserProfile/>
+              </ProtectedRoute>
+            }
           />
 
         </Routes>

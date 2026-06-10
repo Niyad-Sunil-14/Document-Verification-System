@@ -10,7 +10,7 @@ function StatusTracker({ status = 'PENDING', uploadedAt = 'Recent' }) {
   const steps = [
     {
       id: 1,
-      title: 'Document Ingested',
+      title: 'Document Uploaded',
       description: `Successfully uploaded on ${uploadedAt}`,
       isComplete: true, 
       isCurrent: false,
@@ -18,8 +18,8 @@ function StatusTracker({ status = 'PENDING', uploadedAt = 'Recent' }) {
     },
     {
       id: 2,
-      title: 'Automated OCR Scan',
-      description: status === 'PENDING' ? 'Extracting metadata metrics...' : 'Text stream extracted cleanly.',
+      title: 'Automated Scan',
+      description: status === 'PENDING' ? 'Extracting data...' : 'Data extracted cleanly.',
       isComplete: status !== 'PENDING',
       isCurrent: status === 'PENDING',
       color: status !== 'PENDING' 
@@ -28,8 +28,8 @@ function StatusTracker({ status = 'PENDING', uploadedAt = 'Recent' }) {
     },
     {
       id: 3,
-      title: 'Compliance Verification',
-      description: status === 'PENDING' ? 'Awaiting automated verification check...' : 'Rules engine validation complete.',
+      title: 'Verification Completed',
+      description: status === 'PENDING' ? 'Awaiting automated verification check...' : 'Validation complete.',
       isComplete: status !== 'PENDING',
       isCurrent: false, 
       color: status !== 'PENDING'
@@ -38,7 +38,7 @@ function StatusTracker({ status = 'PENDING', uploadedAt = 'Recent' }) {
     },
     {
       id: 4,
-      title: status === 'REJECTED' ? 'Audit Rejected' : 'Audit Approved',
+      title: status === 'REJECTED' ? 'Document Rejected' : 'Document Approved',
       description: status === 'PENDING' 
         ? 'Final evaluation pending.' 
         : status === 'APPROVED' 

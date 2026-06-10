@@ -4,9 +4,10 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
 
 class UserSerializer(serializers.ModelSerializer):
+    date_joined = serializers.DateTimeField(format="%Y-%m-%d", read_only=True)
     class Meta:
         model = CustomUser
-        fields = ['id','email','fullname','role']
+        fields = ['id','email','fullname','role','date_joined']
 
 
 
@@ -62,3 +63,25 @@ class ResetPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()
     otp = serializers.CharField(max_length=6, min_length=6)
     new_password = serializers.CharField(min_length=8, write_only=True)
+
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True, write_only=True)
+    new_password = serializers.CharField(required=True, write_only=True)
+
+    def validate_old_password(self, value):
+        # Grab the logged-in user instance passed from the view context
+        user = self.context['request'].user
+        
+        # Verify if the input matches their active password hash
+        if not user.check_password(value):
+            raise serializers.ValidationError("Your current password parameter is incorrect.")
+        return value
+
+    def validate(self, data):
+        # Prevent the user from re-submitting their old password as the new password
+        if data['old_password'] == data['new_password']:
+            raise serializers.ValidationError({"new_password": "New password cannot match your current cipher."})
+        
+        return data

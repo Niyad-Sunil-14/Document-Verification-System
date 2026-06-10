@@ -121,3 +121,38 @@ class UserProfileView(APIView):
         # request.user contains the authenticated user instance mapped by the JWT
         serializer = UserSerializer(request.user)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def put(self, request, *args, **kwargs):
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            
+        # If the email format is wrong or names are invalid, return a 400 bad request back to React
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, *args, **kwargs):
+        # Pass the request context so the serializer can access request.user
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        
+        if serializer.is_valid():
+            user = request.user
+            
+            # Use set_password to cleanly hash and salt the plaintext string
+            user.set_password(serializer.validated_data['new_password'])
+            user.save()
+            
+            # Pro-Tip: If you are using simple JWT tracking nodes, the user session 
+            # remains valid until token expiration. No extra actions needed!
+            return Response(
+                {"detail": "Password signature updated successfully across server clusters."}, 
+                status=status.HTTP_200_OK
+            )
+            
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
