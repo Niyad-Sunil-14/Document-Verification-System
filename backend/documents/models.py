@@ -5,16 +5,12 @@ import os
 
 
 def user_directory_path(instance, filename):
-    # 1. Check if the user relation is already assigned to the model instance
     if instance.user and instance.user.id:
         return f'user_{instance.user.id}/documents/{filename}'
     
-    # 2. FALLBACK: If DRF triggers this function before assigning the user relation,
-    # look inside the file raw upload logs to extract the user context safely.
     if hasattr(instance, '_uploaded_by'):
         return f'user_{instance._uploaded_by.id}/documents/{filename}'
 
-    # 3. Last resort fallback to keep the upload from breaking
     return f'anonymous/documents/{filename}'
 
 

@@ -32,18 +32,15 @@ class AdminTokenObtainSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-        # 1. Encrypt the role INSIDE the token payload (tamper-proof)
         token['role'] = user.role  
         return token
 
     def validate(self, attrs):
         data = super().validate(attrs)
         
-        # 2. Absolute gatekeeper check
         if self.user.role != 'ADMIN':
             raise AuthenticationFailed(detail="Access denied. Admin privileges required.")
         
-        # 3. Add public helper data to the raw response body
         data['fullname'] = getattr(self.user, 'fullname', '')
         data['role'] = self.user.role
         return data

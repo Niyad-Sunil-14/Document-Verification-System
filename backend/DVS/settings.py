@@ -145,7 +145,7 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated', # Blocks everyone by default
+        'rest_framework.permissions.IsAuthenticated',
     ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
@@ -156,7 +156,6 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'Secure Ingestion, OCR Text Extraction, and Identity Vault Management API Pipeline.',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
-    # Component configuration for JWT Bearer Tokens
     'SECURITY': [{'BearerAuth': []}],
     'COMPONENT_SPLIT_REQUEST': True,
 }
@@ -167,16 +166,9 @@ AUTH_USER_MODEL = 'users.CustomUser'
 
 
 SIMPLE_JWT = {
-    # Extend the short-lived access token (e.g., to 30 or 60 minutes)
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
-    
-    # Extend the refresh token session depth (e.g., to 7 or 14 days)
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    
-    # When a user gets a new access token, issue them a fresh brand new refresh token too!
     'ROTATE_REFRESH_TOKENS': True,
-    
-    # Put old used refresh tokens on a blacklist to block reuse attacks
     'BLACKLIST_AFTER_ROTATION': True,
 }
 
@@ -191,5 +183,4 @@ CORS_ALLOWED_ORIGINS = [
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# The public URL prefix that the browser uses to access these files.
 MEDIA_URL = '/media/'
