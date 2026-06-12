@@ -24,6 +24,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             email=validated_data['email'],
             fullname=validated_data['fullname'],
             password=validated_data['password'],
+            is_active=False
         )
         return user
     
@@ -82,3 +83,5 @@ class ChangePasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError({"new_password": "New password cannot match your current cipher."})
         
         return data
+    
+

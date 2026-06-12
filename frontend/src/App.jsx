@@ -12,6 +12,8 @@ import Upload from './components/pages/user/Upload';
 import MyDocument from './components/pages/user/MyDocument';
 import DocumentDetails from './components/pages/user/DocumentDetails';
 import UserProfile from './components/pages/user/UserProfile';
+import GuestRoutes from './routes/GuestRoute';
+import RegisterOTP from './components/auth/RegisterOTP';
 
 function App() {
 
@@ -20,11 +22,16 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register/>} />
           <Route path='/admin-login' element={<AdminLogin/>}/>
-          <Route path='/forgot-password' element={<ForgotPassword/>}/>
-          
+
+          {/* GUEST-ONLY ROUTES (Logged-in users CANNOT access these) */}
+          <Route element={<GuestRoutes />}>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register/>} />
+            <Route path='/forgot-password' element={<ForgotPassword/>}/>
+            <Route path='/verify-registration' element={<RegisterOTP/>}/>
+          </Route>
+              
 
 
           <Route path='/admin-dashboard' element={

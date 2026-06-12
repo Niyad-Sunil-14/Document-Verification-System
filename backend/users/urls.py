@@ -6,6 +6,8 @@ urlpatterns = [
     
     path('auth/admin-login/', AdminLoginView.as_view(), name='auth_admin_login'),
     path('auth/register/', RegisterView.as_view(), name='auth_register'),
+    path('auth/verify-registration/', VerifyRegistrationView.as_view(), name='verify-registration'),
+    path('auth/resend-otp/', ResendOTPView.as_view(), name='resend-otp'),
     path('auth/logout/', LogoutView.as_view(), name='logout'),
 
     path('auth/login/',TokenObtainPairView.as_view(),name='token_obtain_pair'),

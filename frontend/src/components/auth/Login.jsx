@@ -16,7 +16,7 @@ const Login = () => {
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
 
-      navigate('/user-dashboard');
+      navigate('/user-dashboard',{ replace: true });
     } catch (err) {
       const errorMsg = err.response?.data?.detail || "Invalid Email or Password";
       setServerError(errorMsg);
