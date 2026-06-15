@@ -20,12 +20,13 @@ class Document(models.Model):
     STATUS_CHOICES = [
         ('PENDING', 'Pending Review'),
         ('APPROVED', 'Approved by Admin'),
-        ('REJECTED', 'Rejected / Invalid'),
+        ('REJECTED', 'Rejected'),
     ]
 
     user = models.ForeignKey(CustomUser,on_delete=models.CASCADE,related_name='documents')
     document_type = models.CharField(max_length=50,help_text="The classification type of the document (e.g., INVOICE, RECEIPT, PASSPORT).")
-    file = models.FileField(upload_to=user_directory_path,help_text="The uploaded physical file (PDF, PNG, JPG, etc.).")
+    file = models.URLField(max_length=1000)
+    filename = models.CharField(max_length=255, blank=True, default="")
     status = models.CharField(max_length=20, 
                               choices=STATUS_CHOICES, 
                               default='PENDING',
