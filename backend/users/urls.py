@@ -10,7 +10,7 @@ urlpatterns = [
     path('auth/resend-otp/', ResendOTPView.as_view(), name='resend-otp'),
     path('auth/logout/', LogoutView.as_view(), name='logout'),
 
-    path('auth/login/',TokenObtainPairView.as_view(),name='token_obtain_pair'),
+    path('auth/login/',UserLoginView.as_view(),name='token_obtain_pair'),
     path('token/refresh/',TokenRefreshView.as_view(),name='token_refresh'),
     path('token/blacklist/', TokenBlacklistView.as_view(), name='token_blacklist'),
 

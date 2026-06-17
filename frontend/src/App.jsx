@@ -16,56 +16,56 @@ import GuestRoutes from './routes/GuestRoute';
 import RegisterOTP from './components/auth/RegisterOTP';
 
 function App() {
-
   return (
     <>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path='/admin-login' element={<AdminLogin/>}/>
 
-          {/* GUEST-ONLY ROUTES (Logged-in users CANNOT access these) */}
+          {/* GUEST-ONLY ROUTES */}
           <Route element={<GuestRoutes />}>
+            <Route path='/admin-login' element={<AdminLogin/>}/>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register/>} />
             <Route path='/forgot-password' element={<ForgotPassword/>}/>
             <Route path='/verify-registration' element={<RegisterOTP/>}/>
           </Route>
-              
 
-
+          {/* 🔒 ADMINISTRATIVE PANELS */}
           <Route path='/admin-dashboard' element={
               <ProtectedRoute allowedRoles={['ADMIN']}>
                 <AdminDashboard/>
               </ProtectedRoute>
             }
           />
+
+          {/* 🔒 CLIENT PORTAL PATHS (Strictly protected from Admins using allowedRoles) */}
           <Route path="/user-dashboard" element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['USER']}>
                 <Dashboard/>
               </ProtectedRoute>
             }
           />
           <Route path='/upload' element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['USER']}>
                 <Upload/>
               </ProtectedRoute>
             }
           />
           <Route path='/documents' element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['USER']}>
                 <MyDocument/>
               </ProtectedRoute>
             }
           />
           <Route path="/documents/:id" element={
-            <ProtectedRoute>
-              <DocumentDetails/>
-            </ProtectedRoute>
-          } 
+              <ProtectedRoute allowedRoles={['USER']}>
+                <DocumentDetails/>
+              </ProtectedRoute>
+            } 
           />
           <Route path='/profile' element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['USER']}>
                 <UserProfile/>
               </ProtectedRoute>
             }

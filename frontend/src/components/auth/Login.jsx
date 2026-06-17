@@ -7,16 +7,27 @@ const Login = () => {
   const [serverError, setServerError] = useState("");
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
   const navigate = useNavigate();
-  const [showPassword,setShowPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false); // 🔥 FIXED: Boolean configuration instead of a blank string
 
   const onSubmit = async (data) => {
     setServerError(""); 
     try {
-      const response = await axiosInstance.post('auth/login/', data);
-      localStorage.setItem('access_token', response.data.access);
-      localStorage.setItem('refresh_token', response.data.refresh);
+      // Alternative approach inside try block if backend doesn't output info on login:
+  const response = await axiosInstance.post('auth/login/', data);
 
-      navigate('/user-dashboard',{ replace: true });
+  // Temporarily attach token to fetch profile data
+  localStorage.setItem('access_token', response.data.access);
+
+  const profileResponse = await axiosInstance.get('users/profile/');
+  if (profileResponse.data.is_staff || profileResponse.data.is_superuser) {
+    localStorage.clear(); // Drop the token immediately
+    setServerError("Access Denied: Administrators must use the secure Staff Gateway portal.");
+    return;
+  }
+
+  // Valid user, store refresh token and proceed
+  localStorage.setItem('refresh_token', response.data.refresh);
+navigate('/user-dashboard', { replace: true });
     } catch (err) {
       const errorMsg = err.response?.data?.detail || "Invalid Email or Password";
       setServerError(errorMsg);
@@ -24,8 +35,8 @@ const Login = () => {
   };
 
   const eyes = () => {
-    setShowPassword(!showPassword)
-  }
+    setShowPassword(!showPassword);
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
@@ -40,12 +51,13 @@ const Login = () => {
         </div>
 
         <div className="md:w-1/2 bg-white p-10 flex flex-col justify-center">
-          <h2 className="text-2xl font-bold text-gray-900 text-center mb-8">Welcome Back</h2>
+          <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">Welcome Back</h2>
+          <p className="text-xs text-gray-400 text-center mb-8"></p>
           
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             
             {serverError && (
-              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm font-medium animate-pulse">
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm font-medium">
                 {serverError}
               </div>
             )}
@@ -71,9 +83,9 @@ const Login = () => {
                   errors.password || serverError ? 'border-red-500 bg-red-50' : 'border-gray-300'
                 }`}
               />
-              <button onClick={eyes} type="button" className="absolute right-3 top-3.5 text-gray-400">
+              <button onClick={eyes} type="button" className="absolute right-3 top-3.5 text-gray-400 cursor-pointer">
                 {
-                  showPassword ? (<i class="fa-regular fa-eye"></i>) : (<i class="fa-regular fa-eye-slash"></i>)
+                  showPassword ? (<i className="fa-regular fa-eye"></i>) : (<i className="fa-regular fa-eye-slash"></i>)
                 }                                  
               </button>
               {errors.password && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.password.message}</p>}
@@ -90,7 +102,7 @@ const Login = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className={`w-full py-3 rounded-lg text-white font-semibold transition-all shadow-lg ${
+              className={`w-full py-3 rounded-lg text-white font-semibold transition-all shadow-lg cursor-pointer ${
                 isSubmitting ? 'bg-gray-400' : 'bg-[#4F00FF] hover:bg-[#3D00CC] active:scale-[0.98]'
               }`}
             >

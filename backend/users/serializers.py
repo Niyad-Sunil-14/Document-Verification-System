@@ -47,6 +47,20 @@ class AdminTokenObtainSerializer(TokenObtainPairSerializer):
         return data
 
 
+# 1. CUSTOM SERIALIZERS (Where role inspection happens)
+class StrictUserTokenSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        # Let SimpleJWT authenticate the credentials first
+        data = super().validate(attrs)
+        
+        # 🔥 CLIENT GATEKEEPER: If user is staff or superuser, block them from this endpoint!
+        if self.user.is_staff or self.user.is_superuser:
+            raise AuthenticationFailed(
+                "Access Denied: Administrators are restricted from logging into the Client Portal.",
+                code="access_denied"
+            )
+        return data
+
 
 
 class RequestOTPSerializer(serializers.Serializer):

@@ -15,6 +15,7 @@ from django.core.mail import send_mail
 from django.contrib.auth import get_user_model
 import random
 import logging
+from django.contrib.auth import authenticate
 # Create your views here.
 
 User = get_user_model()
@@ -121,6 +122,10 @@ class ResendOTPView(APIView):
     
 
 
+class UserLoginView(TokenObtainPairView):
+    """Strictly issues tokens to standard USER accounts only."""
+    serializer_class = StrictUserTokenSerializer
+
 class AdminLoginView(TokenObtainPairView):
     serializer_class = AdminTokenObtainSerializer
 
@@ -198,9 +203,15 @@ class LogoutView(APIView):
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, *args, **kwargs):
-        serializer = UserSerializer(request.user)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+    def get(self, request):
+        return Response({
+            "email": request.user.email,
+            "fullname": getattr(request.user, 'fullname', request.user.get_full_name()),
+            
+            # 🔥 CRUCIAL: Make sure these two lines are returning data to your React frontend
+            "is_staff": request.user.is_staff,
+            "is_superuser": request.user.is_superuser
+        })
     
     def put(self, request, *args, **kwargs):
         serializer = UserSerializer(request.user, data=request.data, partial=True)
