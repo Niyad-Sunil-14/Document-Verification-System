@@ -38,22 +38,24 @@ class DocumentUploadView(APIView):
         if serializer.is_valid():
             uploaded_file = request.FILES['file']
             document_type = serializer.validated_data.get('document_type', '')
+            original_filename = uploaded_file.name
             
-            # 🔥 CRUCIAL: Grab this early while the stream wrapper is completely fresh
-            is_pdf_file = uploaded_file.name.lower().endswith('.pdf')
+            is_pdf_file = original_filename.lower().endswith('.pdf')
             text = ""
+            
+            # 🔥 Establish default state variable for the new field
+            ocr_pipeline_status = "PENDING"
             
             # 1. CLEAN TEXT EXTRACTION ROUTING MATRIX
             try:
-                # 🔥 FIX 1: Rewind the stream pointer to the absolute start BEFORE OCR begins
                 uploaded_file.seek(0)
                 
                 if is_pdf_file:
-                    logger.info(f"Extracting native text from PDF: {uploaded_file.name}")
+                    logger.info(f"Extracting native text from PDF: {original_filename}")
                     text = extract_text_from_pdf(uploaded_file)
                 else:
-                    logger.info(f"Running OpenCV & Tesseract OCR pipeline on image: {uploaded_file.name}")
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as temp_file:
+                    logger.info(f"Running OpenCV & Tesseract OCR pipeline on image: {original_filename}")
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(original_filename)[1]) as temp_file:
                         for chunk in uploaded_file.chunks():
                             temp_file.write(chunk)
                         temp_filename = temp_file.name
@@ -65,15 +67,22 @@ class DocumentUploadView(APIView):
                     finally:
                         if os.path.exists(temp_filename):
                             os.remove(temp_filename)
+                
+                # 🔥 EVALUATE PIPELINE HEALTH: Set status based on character discovery
+                if text and text.strip():
+                    ocr_pipeline_status = "PROCESSED"
+                else:
+                    ocr_pipeline_status = "FAILED"
                             
             except Exception as ocr_err:
                 logger.error(f"Text extraction engine failed: {ocr_err}")
+                # 🔥 FALLBACK ON CRASH: Mark explicitly as a pipeline failure
+                ocr_pipeline_status = "FAILED"
                 
             # 2. REWIND THE STREAM POINTER FOR CLOUDINARY
-            # 🔥 FIX 2: Rewind it AGAIN so Cloudinary reads a full file from byte 0!
             uploaded_file.seek(0)
 
-            # 3. DISPATCH THE ASSET DIRECTLY TO CLOUDINARY WITH STRICT EXPLICIT TYPING
+            # 3. DISPATCH THE ASSET DIRECTLY TO CLOUDINARY
             try:
                 cloudinary.config(
                     cloud_name=env('CLOUDINARY_CLOUD_NAME'),
@@ -84,7 +93,7 @@ class DocumentUploadView(APIView):
                 
                 determined_resource_type = "raw" if is_pdf_file else "image"
                 
-                logger.info(f"Uploading file {uploaded_file.name} to Cloudinary as {determined_resource_type}...")
+                logger.info(f"Uploading file {original_filename} to Cloudinary as {determined_resource_type}...")
                 
                 upload_result = cloudinary.uploader.upload(
                     uploaded_file,
@@ -100,8 +109,10 @@ class DocumentUploadView(APIView):
                         user=request.user,
                         document_type=document_type,
                         file=secure_url,
-                        extracted_text=text.strip() if text else "",
-                        status="PENDING"
+                        filename=original_filename,
+                        status="PENDING", # 👈 Remains under review as requested
+                        ocr_status=ocr_pipeline_status, # 🔥 SAVED SEPARATELY HERE
+                        extracted_text=text.strip() if text else ""
                     )
 
                 return Response(
@@ -109,8 +120,10 @@ class DocumentUploadView(APIView):
                         "id": document.id, 
                         "document_type": document.document_type,
                         "file": document.file, 
+                        "filename": document.filename,
                         "extracted_text": document.extracted_text, 
-                        "status": document.status
+                        "status": document.status,
+                        "ocr_status": document.ocr_status # Expose tracking to your frontend responses
                     },
                     status=status.HTTP_201_CREATED
                 )
@@ -147,3 +160,47 @@ class DocumentDetailView(RetrieveAPIView):
         if self.request.user.is_staff:
             return Document.objects.all()
         return Document.objects.filter(user=self.request.user)
+    
+
+
+
+
+
+
+# ADMIN SIDE
+from django.db.models import Count, Q
+from .models import Document,CustomUser  # Adjust to your exact import path
+
+class AdminDashboardMetricsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        # 🛡️ Staff Gatekeeper Check
+        if not request.user.is_staff and not request.user.is_superuser:
+            return Response(
+                {"detail": "Authorization Fault: Lacks elevated clearance."}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 📊 Aggregate database totals completely on the SQL layer
+        metrics = Document.objects.aggregate(
+            total_documents=Count('id'),
+            pending_documents=Count('id', filter=Q(status='PENDING')),
+            approved_documents=Count('id', filter=Q(status='APPROVED')),
+            rejected_documents=Count('id', filter=Q(status='REJECTED')),
+            ocr_processed=Count('id', filter=Q(ocr_status='PROCESSED')),
+            ocr_failed=Count('id', filter=Q(ocr_status='FAILED'))
+        )
+
+        # Distinct user account aggregation tracking
+        total_users = CustomUser.objects.filter(is_staff=False, is_superuser=False).count()
+
+        return Response({
+            "totalUsers": total_users,
+            "totalDocuments": metrics['total_documents'],
+            "pendingDocuments": metrics['pending_documents'],
+            "approvedDocuments": metrics['approved_documents'],
+            "rejectedDocuments": metrics['rejected_documents'],
+            "ocrProcessed": metrics['ocr_processed'],
+            "ocrFailed": metrics['ocr_failed']
+        }, status=status.HTTP_200_OK)

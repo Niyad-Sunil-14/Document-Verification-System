@@ -1,6 +1,6 @@
 from django.db import models
-from users.models import CustomUser
 import os
+from users.models import CustomUser
 # Create your models here.
 
 
@@ -15,6 +15,7 @@ def user_directory_path(instance, filename):
 
 
 
+
 class Document(models.Model):
 
     STATUS_CHOICES = [
@@ -23,14 +24,43 @@ class Document(models.Model):
         ('REJECTED', 'Rejected'),
     ]
 
-    user = models.ForeignKey(CustomUser,on_delete=models.CASCADE,related_name='documents')
-    document_type = models.CharField(max_length=50,help_text="The classification type of the document (e.g., INVOICE, RECEIPT, PASSPORT).")
+    # 🔥 NEW: Choices matrix tracking the raw Tesseract/PDF parsing health pipeline
+    OCR_STATUS_CHOICES = [
+        ('PENDING', 'Awaiting Scan'),
+        ('PROCESSED', 'OCR Processed'),
+        ('FAILED', 'OCR Failed'),
+        ('SKIPPED', 'OCR Skipped'),
+    ]
+
+    user = models.ForeignKey(
+        CustomUser, 
+        on_delete=models.CASCADE, 
+        related_name='documents'
+    )
+    document_type = models.CharField(
+        max_length=50, 
+        help_text="The classification type of the document (e.g., INVOICE, RECEIPT, PASSPORT)."
+    )
     file = models.URLField(max_length=1000)
+    
+    # Keeping your text field to store the filename string
     filename = models.CharField(max_length=255, blank=True, default="")
-    status = models.CharField(max_length=20, 
-                              choices=STATUS_CHOICES, 
-                              default='PENDING',
-                              help_text="The current processing status of the file.")
+    
+    status = models.CharField(
+        max_length=20, 
+        choices=STATUS_CHOICES, 
+        default='PENDING',
+        help_text="The current processing status of the file."
+    )
+
+    # 🔥 NEW FIELD: Keeps track of OCR engine health independently
+    ocr_status = models.CharField(
+        max_length=20,
+        choices=OCR_STATUS_CHOICES,
+        default='PENDING',
+        help_text="Tracks whether text extraction via Python OCR engine succeeded or threw errors."
+    )
+
     uploaded_at = models.DateTimeField(
         db_index=True, 
         auto_now_add=True,
@@ -48,8 +78,14 @@ class Document(models.Model):
         verbose_name_plural = "Document Uploads"
 
     def __str__(self):
-        return f"{self.document_type} - {self.user.username} ({self.status})"
+        return f"{self.document_type} - {self.user.email} ({self.status} | OCR: {self.ocr_status})"
 
+    # 🔥 FIXED PROPERTY DESCRIPTOR CLASH:
+    # Changed the method name to 'computed_filename' so it does not destroy your 'filename' database column entry!
     @property
-    def filename(self):
-        return os.path.basename(self.file.name)
+    def computed_filename(self):
+        if self.filename:
+            return self.filename
+        if self.file:
+            return os.path.basename(self.file)
+        return "Unknown_Asset.file"
