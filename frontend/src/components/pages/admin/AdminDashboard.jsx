@@ -80,8 +80,8 @@ export default function AdminDashboard() {
             <div className="inline-flex items-center space-x-2 bg-violet-50 text-violet-700 font-bold px-3 py-1 rounded-lg text-xs border border-violet-100 uppercase tracking-wider mb-2">
               <span>🛡️ Admin Dashboard</span>
             </div>
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">System Controls & Compliance Logs</h1>
-            <p className="text-gray-500 mt-1">Global oversight across unique users, file validation nodes, and system-wide Tesseract OCR metrics.</p>
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Overall Logs</h1>
+            <p className="text-gray-500 mt-1">Track all registered users, uploaded documents, and active text extraction logs.</p>
           </div>
         </div>
 
@@ -96,9 +96,8 @@ export default function AdminDashboard() {
           {cardData.map((card) => (
             <div 
               key={card.id} 
-              className={`bg-white border rounded-2xl p-6 shadow-sm flex items-center justify-between transition hover:shadow-md ${
-                card.id === 3 ? 'border-amber-200 ring-2 ring-amber-500/5' : 'border-slate-200'
-              }`}
+              className={`bg-white border rounded-2xl p-6 shadow-sm flex items-center justify-between transition hover:shadow-md border-slate-200
+              `}
             >
               <div className="space-y-1.5">
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{card.title}</p>

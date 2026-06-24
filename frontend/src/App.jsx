@@ -14,6 +14,7 @@ import DocumentDetails from './components/pages/user/DocumentDetails';
 import UserProfile from './components/pages/user/UserProfile';
 import GuestRoutes from './routes/GuestRoute';
 import RegisterOTP from './components/auth/RegisterOTP';
+import AllDocuments from './components/pages/admin/AllDocuments';
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
             <Route path='/verify-registration' element={<RegisterOTP/>}/>
           </Route>
 
+
           {/* 🔒 ADMINISTRATIVE PANELS */}
           <Route path='/admin-dashboard' element={
               <ProtectedRoute allowedRoles={['ADMIN']}>
@@ -38,6 +40,14 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          <Route path='/all-documents' element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AllDocuments/>
+              </ProtectedRoute>
+            }
+          />
+
 
           {/* 🔒 CLIENT PORTAL PATHS (Strictly protected from Admins using allowedRoles) */}
           <Route path="/user-dashboard" element={

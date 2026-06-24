@@ -26,10 +26,8 @@ class Document(models.Model):
 
     # 🔥 NEW: Choices matrix tracking the raw Tesseract/PDF parsing health pipeline
     OCR_STATUS_CHOICES = [
-        ('PENDING', 'Awaiting Scan'),
         ('PROCESSED', 'OCR Processed'),
         ('FAILED', 'OCR Failed'),
-        ('SKIPPED', 'OCR Skipped'),
     ]
 
     user = models.ForeignKey(

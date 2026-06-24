@@ -120,15 +120,15 @@ export default function Upload() {
                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition text-slate-800 shadow-sm"
               >
                 <option value="PASSPORT">🛂 Personal Passport Scan</option>
-                <option value="DRIVERS_LICENSE">🚗 Driver's License</option>
-                <option value="ID_CARD">🪪 Government Issued ID Card</option>
+                <option value="DRIVERS LICENSE">🚗 Driver's License</option>
+                <option value="ID CARD">🪪 Government Issued ID Card</option>
                 <option value="INVOICE">🧾 Commercial Invoice</option>
                 <option value="RECEIPT">🛒 Retail Sales Receipt</option>
                 <option value="PAYSLIP">💵 Payroll Earnings Statement</option>
-                <option value="BANK_STATEMENT">🏦 Official Bank Statement</option>
-                <option value="UTILITY_BILL">⚡ Utility Proof of Address</option>
+                <option value="BANK STATEMENT">🏦 Official Bank Statement</option>
+                <option value="UTILITY BILL">⚡ Utility Proof of Address</option>
                 <option value="CONTRACT">📜 Signed Business Contract</option>
-                <option value="TAX_FORM">📊 Corporate Tax Filing Docs</option>
+                <option value="TAX FORM">📊 Corporate Tax Filing Docs</option>
               </select>
             </div>
 
