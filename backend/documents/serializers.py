@@ -21,13 +21,14 @@ class DocumentListSerializer(serializers.ModelSerializer):
         model = Document
         fields = [
             'id', 
-            'username',  # 👈 Added to the fields mapping manifest array
+            'username', 
             'document_type', 
             'file', 
             'filename',
             'status', 
             'ocr_status',
-            'status_display', 
+            'status_display',
+            'ocr_accuracy', 
             'uploaded_at',
         ]
 
@@ -46,7 +47,7 @@ class DocumentDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Document
-        fields = ['id', 'username', 'file', 'filename', 'document_type', 'status', 'extracted_text', 'uploaded_at']
+        fields = ['id', 'username', 'file', 'filename', 'document_type', 'status','ocr_status', 'extracted_text','ocr_accuracy', 'uploaded_at']
 
     def get_uploaded_at(self, obj):
         date_field = getattr(obj, 'date_joined', getattr(obj, 'uploaded_at', getattr(obj, 'created_at', None)))

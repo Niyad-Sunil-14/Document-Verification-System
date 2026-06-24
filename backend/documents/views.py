@@ -12,6 +12,10 @@ from rest_framework.views import APIView
 from rest_framework.generics import RetrieveAPIView
 import cloudinary.uploader
 import pytesseract
+from pytesseract import Output
+from pdf2image import convert_from_path 
+import cv2
+import numpy as np
 
 import os
 from .models import Document
@@ -24,6 +28,8 @@ from .utils import extract_text_from_pdf, preprocess_image_for_ocr
 
 logger = logging.getLogger(__name__)
 
+def pil_to_opencv(pil_image):
+    return cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
 
 # Initialize env reader locally to ensure direct path lookup
 env = environ.Env()
@@ -42,47 +48,75 @@ class DocumentUploadView(APIView):
             
             is_pdf_file = original_filename.lower().endswith('.pdf')
             text = ""
-            
-            # 🔥 Establish default state variable for the new field
+            ocr_accuracy_score = 0.0
             ocr_pipeline_status = "PENDING"
             
-            # 1. CLEAN TEXT EXTRACTION ROUTING MATRIX
+            temp_filename = None
             try:
-                uploaded_file.seek(0)
-                
-                if is_pdf_file:
-                    logger.info(f"Extracting native text from PDF: {original_filename}")
-                    text = extract_text_from_pdf(uploaded_file)
-                else:
-                    logger.info(f"Running OpenCV & Tesseract OCR pipeline on image: {original_filename}")
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(original_filename)[1]) as temp_file:
-                        for chunk in uploaded_file.chunks():
-                            temp_file.write(chunk)
-                        temp_filename = temp_file.name
+                suffix = os.path.splitext(original_filename)[1]
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+                    for chunk in uploaded_file.chunks():
+                        temp_file.write(chunk)
+                    temp_filename = temp_file.name
 
-                    try:
-                        processed_image = preprocess_image_for_ocr(temp_filename)
-                        if processed_image:
-                            text = pytesseract.image_to_string(processed_image)
-                    finally:
-                        if os.path.exists(temp_filename):
-                            os.remove(temp_filename)
-                
-                # 🔥 EVALUATE PIPELINE HEALTH: Set status based on character discovery
-                if text and text.strip():
-                    ocr_pipeline_status = "PROCESSED"
+                processed_image = None
+
+                # 🔥 FIX: ROUTE BY FILE EXTENSION
+                if is_pdf_file:
+                    logger.info(f"Converting PDF {original_filename} pages to image elements...")
+                    # Convert only the first page to save memory/processing overhead
+                    pages = convert_from_path(temp_filename, first_page=1, last_page=1)
+                    
+                    if pages:
+                        # Convert PIL image element to an OpenCV matrix object
+                        opencv_img = pil_to_opencv(pages[0])
+                        # Pass the OpenCV image directly or save it to process
+                        # Assuming your preprocess function takes a path, we can save it or rewrite your function to accept an image object
+                        # If preprocess_image_for_ocr accepts a string path, we write out a temporary image:
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as img_temp:
+                            cv2.imwrite(img_temp.name, opencv_img)
+                            processed_image = preprocess_image_for_ocr(img_temp.name)
+                            
+                            # Cleanup the immediate temporary page converter file path
+                            try:
+                                os.remove(img_temp.name)
+                            except:
+                                pass
+                else:
+                    # Regular image processing routing logic
+                    processed_image = preprocess_image_for_ocr(temp_filename)
+
+                # 🚀 RUN UNIFIED TESSERACT OCR ENGINE SCAN
+                if processed_image is not None:
+                    text = pytesseract.image_to_string(processed_image)
+                    ocr_data = pytesseract.image_to_data(processed_image, output_type=Output.DICT)
+                    
+                    valid_confidences = [int(c) for c in ocr_data['conf'] if int(c) > -1]
+                    if valid_confidences:
+                        calculated_accuracy = sum(valid_confidences) / len(valid_confidences)
+                        ocr_accuracy_score = round(calculated_accuracy, 2)
+                        ocr_pipeline_status = "PROCESSED"
+                    else:
+                        ocr_pipeline_status = "FAILED"
                 else:
                     ocr_pipeline_status = "FAILED"
-                            
+
             except Exception as ocr_err:
-                logger.error(f"Text extraction engine failed: {ocr_err}")
-                # 🔥 FALLBACK ON CRASH: Mark explicitly as a pipeline failure
+                logger.error(f"OCR Pipeline failed: {ocr_err}")
+                ocr_accuracy_score = 0.0
                 ocr_pipeline_status = "FAILED"
-                
-            # 2. REWIND THE STREAM POINTER FOR CLOUDINARY
+            
+            finally:
+                if temp_filename and os.path.exists(temp_filename):
+                    try:
+                        os.remove(temp_filename)
+                    except Exception as e:
+                        logger.error(f"Failed to delete temp file {temp_filename}: {e}")
+
+            # REWIND THE STREAM POINTER FOR CLOUDINARY
             uploaded_file.seek(0)
 
-            # 3. DISPATCH THE ASSET DIRECTLY TO CLOUDINARY
+            # DISPATCH THE ASSET DIRECTLY TO CLOUDINARY
             try:
                 cloudinary.config(
                     cloud_name=env('CLOUDINARY_CLOUD_NAME'),
@@ -93,7 +127,7 @@ class DocumentUploadView(APIView):
                 
                 determined_resource_type = "raw" if is_pdf_file else "image"
                 
-                logger.info(f"Uploading file {original_filename} to Cloudinary as {determined_resource_type}...")
+                logger.info(f"Uploading file {original_filename} to Cloudinary...")
                 
                 upload_result = cloudinary.uploader.upload(
                     uploaded_file,
@@ -103,15 +137,16 @@ class DocumentUploadView(APIView):
                 
                 secure_url = upload_result.get("secure_url")
                 
-                # 4. SAVE TO DATABASE SAFEGUARDED BY A TRANSACTION LAYER
+                # SAVE TO DATABASE SAFEGUARDED BY A TRANSACTION LAYER
                 with transaction.atomic():
                     document = Document.objects.create(
                         user=request.user,
                         document_type=document_type,
                         file=secure_url,
-                        filename=original_filename,
-                        status="PENDING", # 👈 Remains under review as requested
-                        ocr_status=ocr_pipeline_status, # 🔥 SAVED SEPARATELY HERE
+                        filename=original_filename, 
+                        status="PENDING",
+                        ocr_status=ocr_pipeline_status,
+                        ocr_accuracy=ocr_accuracy_score,
                         extracted_text=text.strip() if text else ""
                     )
 
@@ -120,10 +155,11 @@ class DocumentUploadView(APIView):
                         "id": document.id, 
                         "document_type": document.document_type,
                         "file": document.file, 
-                        "filename": document.filename,
+                        "filename": original_filename,  # Fixed to fall back cleanly
                         "extracted_text": document.extracted_text, 
                         "status": document.status,
-                        "ocr_status": document.ocr_status # Expose tracking to your frontend responses
+                        "ocr_status": document.ocr_status,
+                        "ocr_accuracy": document.ocr_accuracy
                     },
                     status=status.HTTP_201_CREATED
                 )
@@ -136,7 +172,6 @@ class DocumentUploadView(APIView):
                 )
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class DocumentListView(APIView):
     permission_classes = [IsAuthenticated]

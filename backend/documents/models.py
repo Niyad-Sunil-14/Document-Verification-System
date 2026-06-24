@@ -70,6 +70,13 @@ class Document(models.Model):
         help_text="The raw text extracted via your Python OCR parser."
     )
 
+    remarks = models.TextField(blank=True, default="")
+
+    ocr_accuracy = models.FloatField(
+        default=0.0,
+        help_text="The calculated mean confidence level percentage of the parsed text."
+    )
+
     class Meta:
         ordering = ['-uploaded_at']
         verbose_name = "Document Upload"

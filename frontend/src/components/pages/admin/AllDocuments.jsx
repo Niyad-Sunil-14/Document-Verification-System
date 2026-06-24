@@ -59,9 +59,15 @@ export default function AllDocuments() {
     }
   };
 
+  // 🔥 NEW: Color-coded styling utility for the global text quality accuracy column
+  const getAccuracyBadgeStyles = (score) => {
+    if (score >= 85) return 'bg-emerald-50 text-emerald-700 border-emerald-200'; // High Quality
+    if (score >= 60) return 'bg-amber-50 text-amber-700 border-amber-200';     // Medium Quality Warning
+    return 'bg-rose-50 text-rose-700 border-rose-200';                        // Low Quality Alarm
+  };
+
   // 4. FILTERING COMPUTATION
   const filteredDocuments = documents.filter((doc) => {
-    // Looks for username matches along with doc type and ID
     const usernameStr = doc.username || doc.user?.username || doc.user_username || '';
     
     const matchesSearch = 
@@ -140,6 +146,8 @@ export default function AllDocuments() {
                   <th className="px-6 py-4">Username</th>
                   <th className="px-6 py-4">Document Type</th>
                   <th className="px-6 py-4">OCR Status</th>
+                  {/* 🔥 NEW THEAD TH: Accuracy Column Title Header */}
+                  <th className="px-6 py-4">OCR Accuracy</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4">Uploaded Date</th>
                   <th className="px-6 py-4 text-right">Action</th>
@@ -156,13 +164,20 @@ export default function AllDocuments() {
                     
                     {/* DOCUMENT TYPE */}
                     <td className="px-6 py-4 uppercase tracking-wider text-xs font-bold text-slate-600">
-                      {doc.document_type || 'Unclassified'}
+                      {(doc.document_type || 'Unclassified').replace(/_/g, ' ')}
                     </td>
                     
                     {/* OCR STATUS */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={getBadgeStyles(doc.ocr_status || 'PENDING', 'OCR')}>
                         {doc.ocr_status || 'PENDING'}
+                      </span>
+                    </td>
+
+                    {/* 🔥 NEW TD: Render dynamic accuracy evaluation tags */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold border ${getAccuracyBadgeStyles(doc.ocr_accuracy)}`}>
+                        {doc.ocr_accuracy !== undefined && doc.ocr_accuracy !== null ? `${doc.ocr_accuracy}%` : '0.0%'}
                       </span>
                     </td>
                     
@@ -181,7 +196,7 @@ export default function AllDocuments() {
                     {/* SIMPLIFIED VIEW ACTION */}
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <button
-                        onClick={() => navigate(`/documents/${doc.id}`)}
+                        onClick={() => navigate(`/admin/documents/${doc.id}`)}
                         className="text-xs bg-slate-100 hover:bg-slate-800 hover:text-white px-3 py-1.5 rounded-md font-semibold transition border border-transparent cursor-pointer"
                       >
                         View

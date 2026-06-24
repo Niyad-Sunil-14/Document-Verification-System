@@ -15,6 +15,7 @@ import UserProfile from './components/pages/user/UserProfile';
 import GuestRoutes from './routes/GuestRoute';
 import RegisterOTP from './components/auth/RegisterOTP';
 import AllDocuments from './components/pages/admin/AllDocuments';
+import AdminDocumentDetails from './components/pages/admin/AdminDocumentDetails';
 
 function App() {
   return (
@@ -44,6 +45,13 @@ function App() {
           <Route path='/all-documents' element={
               <ProtectedRoute allowedRoles={['ADMIN']}>
                 <AllDocuments/>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route path='/admin/documents/:id' element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AdminDocumentDetails/>
               </ProtectedRoute>
             }
           />
