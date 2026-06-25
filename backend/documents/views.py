@@ -1,7 +1,7 @@
 import logging
-import tempfile  # 🔥 Added for secure concurrent processing
-import cloudinary # 🔥 Add this import
-import environ    # 🔥 Add this import
+import tempfile  
+import cloudinary 
+import environ    
 
 from django.db import transaction
 from rest_framework import status
@@ -18,11 +18,12 @@ import cv2
 import numpy as np
 
 import os
-from .models import Document
+from .models import Document,Notification
 from .serializers import (
     DocumentDetailSerializer,
     DocumentListSerializer,
     DocumentUploadSerializer,
+    NotificationSerializer
 )
 from .utils import extract_text_from_pdf, preprocess_image_for_ocr
 
@@ -187,16 +188,109 @@ class DocumentListView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
     
 
-class DocumentDetailView(RetrieveAPIView):
-    permission_classes = [IsAuthenticated]
-    serializer_class = DocumentDetailSerializer
 
-    def get_queryset(self):
-        if self.request.user.is_staff:
-            return Document.objects.all()
-        return Document.objects.filter(user=self.request.user)
+class DocumentDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # 🔥 FIX: Use *args and **kwargs to grab the route parameters safely
+    def get(self, request, *args, **kwargs):
+        try:
+            # Captures 'id' or 'pk' dynamically from the URL pattern mapping
+            doc_id = kwargs.get('id') or kwargs.get('pk')
+            
+            document = Document.objects.get(id=doc_id)
+            serializer = DocumentDetailSerializer(document, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Document.DoesNotExist:
+            return Response({"detail": "Document not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    # 🔥 FIX: Update the patch method the same way
+    def patch(self, request, *args, **kwargs):
+        if not request.user.is_staff and not request.user.is_superuser:
+            return Response(
+                {"detail": "Authorization Fault: Management clearance required."}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        try:
+            doc_id = kwargs.get('id') or kwargs.get('pk')
+            document = Document.objects.get(id=doc_id)
+            
+            # Keep track of old values to see what actually changed
+            old_status = document.status
+            
+            serializer = DocumentDetailSerializer(
+                document, 
+                data=request.data, 
+                partial=True, 
+                context={'request': request}
+            )
+            
+            if serializer.is_valid():
+                # Save updates to the document (status, remarks, etc.)
+                updated_document = serializer.save()
+                
+                # Fetch clean references of the updated data
+                new_status = updated_document.status
+                admin_remarks = updated_document.remarks or ""
+                doc_type_clean = (updated_document.document_type or "Document").replace('_', ' ').title()
+
+                # 🔥 AUTOMATION LAYER: Send custom notifications based on the action taken
+                notification_title = ""
+                notification_desc = ""
+
+                if old_status != new_status:
+                    # Case A: Admin altered the verification status
+                    if new_status == "APPROVED":
+                        notification_title = f"✅ {doc_type_clean} Approved"
+                        notification_desc = f"Your uploaded {doc_type_clean.lower()} has been verified secure by our compliance team."
+                    elif new_status == "REJECTED":
+                        notification_title = f"❌ {doc_type_clean} Rejected"
+                        notification_desc = f"Your uploaded {doc_type_clean.lower()} failed our clearance checks."
+                    else:
+                        notification_title = f"ℹ️ {doc_type_clean} Status Updated"
+                        notification_desc = f"Your document status has been updated to {new_status}."
+                else:
+                    # Case B: Admin only updated/sent audit remarks notes without changing status
+                    notification_title = f"💬 Audit Notes Appended: {doc_type_clean}"
+                    notification_desc = "An administrator has added review remarks to your document registration profile."
+
+                # If there are remarks, append them neatly to the notification body
+                if admin_remarks:
+                    notification_desc += f" Remarks: \"{admin_remarks}\""
+
+                # Save the new notification targeting the document owner
+                Notification.objects.create(
+                    user=updated_document.user,  # 🔥 Crucial: Routes directly to the user who owns the file
+                    title=notification_title,
+                    description=notification_desc,
+                    is_read=False
+                )
+                
+                return Response(serializer.data, status=status.HTTP_200_OK)
+                
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Document.DoesNotExist:
+            return Response({"detail": "Document not found."}, status=status.HTTP_404_NOT_FOUND)
     
 
+class NotificationListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        notifications = Notification.objects.filter(user=request.user)
+        # Limit dropdown query parameter check if present
+        if request.query_params.get('unread_only') == 'true':
+            notifications = notifications.filter(is_read=False)
+        
+        serializer = NotificationSerializer(notifications, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def patch(self, request):
+        # Mark all notifications as read at once
+        Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+        return Response({"detail": "All notifications marked as read."}, status=status.HTTP_200_OK)
 
 
 
@@ -239,3 +333,8 @@ class AdminDashboardMetricsView(APIView):
             "ocrProcessed": metrics['ocr_processed'],
             "ocrFailed": metrics['ocr_failed']
         }, status=status.HTTP_200_OK)
+    
+
+
+
+

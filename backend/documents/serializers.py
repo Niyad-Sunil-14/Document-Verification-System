@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Document
+from .models import Document,Notification
 
 class DocumentUploadSerializer(serializers.ModelSerializer):
     file = serializers.FileField(write_only=True)
@@ -47,7 +47,7 @@ class DocumentDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Document
-        fields = ['id', 'username', 'file', 'filename', 'document_type', 'status','ocr_status', 'extracted_text','ocr_accuracy', 'uploaded_at']
+        fields = ['id', 'username', 'file', 'filename', 'document_type', 'status','ocr_status', 'extracted_text','ocr_accuracy', 'remarks','uploaded_at']
 
     def get_uploaded_at(self, obj):
         date_field = getattr(obj, 'date_joined', getattr(obj, 'uploaded_at', getattr(obj, 'created_at', None)))
@@ -62,3 +62,16 @@ class DocumentDetailSerializer(serializers.ModelSerializer):
         if request and request.user and not request.user.is_staff:
             data.pop('extracted_text', None)
         return data
+    
+
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    created_at_human = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Notification
+        fields = ['id', 'title', 'description', 'is_read', 'created_at', 'created_at_human']
+
+    def get_created_at_human(self, obj):
+        return obj.created_at.strftime("%b %d, %Y at %I:%M %p")

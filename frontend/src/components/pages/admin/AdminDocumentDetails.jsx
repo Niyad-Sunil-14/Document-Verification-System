@@ -245,7 +245,7 @@ export default function AdminDocumentDetails() {
                     onClick={() => handleUpdateStatus('REJECTED')}
                     className="w-full py-2.5 bg-white hover:bg-rose-50 border border-rose-200 text-rose-700 disabled:opacity-40 text-xs font-bold rounded-xl transition duration-100 cursor-pointer"
                   >
-                    {actionLoading ? 'Processing...' : 'Reject & Flag Compliance'}
+                    {actionLoading ? 'Processing...' : 'Reject & Sent Remarks'}
                   </button>
 
                 </div>

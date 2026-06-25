@@ -1,22 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import axiosInstance from '../../../api/Axiosinstance';
 
 export default function Navbar() {
   const navigate = useNavigate();
-  const location = useLocation(); // Captures the current URL route path to dynamically style the active tab
+  const location = useLocation();
 
-  // State Management
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // UI Open/Close Toggles
+  // 🔥 NEW: State for real notifications array data hook
+  const [notifications, setNotifications] = useState([]);
+
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Active navigation link styling helper matching based on current router paths
   const getNavLinkClass = (path) => {
     const isActive = location.pathname === path;
     return `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold h-full transition ${
@@ -26,32 +26,35 @@ export default function Navbar() {
     }`;
   };
 
-  // Profile data fetch loop execution
   useEffect(() => {
-    const fetchUserProfile = async () => {
+    const fetchUserProfileAndAlerts = async () => {
       try {
         setLoading(true);
-        const response = await axiosInstance.get('users/profile/'); 
-        setUser(response.data);
+        const profileResponse = await axiosInstance.get('users/profile/'); 
+        setUser(profileResponse.data);
+
+        // 🔥 Fetch live notifications from database limit payload to top 3 for preview panel
+        const alertResponse = await axiosInstance.get('documents/notifications/');
+        setNotifications(alertResponse.data.slice(0, 3));
       } catch (err) {
-        console.error("Profile fetching failed:", err);
-        setError(err.response?.data?.detail || 'Failed to establish connection to identity vault.');
+        console.error("Profile/Notification systems failing:", err);
+        setError(err.response?.data?.detail || 'Identity sync issue.');
       } finally {
         setLoading(false);
       }
     };
     
-    fetchUserProfile();
+    fetchUserProfileAndAlerts();
   }, []);
 
-  // Secure Token Destruction Pipeline
+  // 🔥 Has unread notification tracking compute logic
+  const hasUnread = notifications.some(n => !n.is_read);
+
   const logoutUser = async () => {
     try {
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
-        await axiosInstance.post('token/blacklist/', {
-          refresh: refreshToken,
-        });
+        await axiosInstance.post('token/blacklist/', { refresh: refreshToken });
       }
     } catch (error) {
       console.error("Backend token blacklisting failed:", error);
@@ -66,15 +69,12 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           
-          {/* LEFT SIDE: BRAND LOGO & LINKS */}
           <div className="flex items-center space-x-8">
-            {/* Logo */}
             <Link to="/user-dashboard" className="flex-shrink-0 flex items-center space-x-2 cursor-pointer">
               <img src="/logo.png" alt="icon" className="w-full h-auto object-contain max-w-[42px]"/>
               <span className="text-xl font-bold tracking-tight text-slate-900">DocVerify</span>
             </Link>
 
-            {/* Desktop Navigation links (Hidden on mobile) */}
             <div className="hidden md:flex space-x-6 h-full">
               <Link to="/user-dashboard" className={getNavLinkClass('/user-dashboard')}>Dashboard</Link>
               <Link to="/documents" className={getNavLinkClass('/documents')}>My Documents</Link>
@@ -83,20 +83,22 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* RIGHT SIDE: NOTIFICATION & PROFILE DROPDOWNS */}
           <div className="hidden md:flex items-center space-x-4">
             
             {/* NOTIFICATION ITEM */}
             <div className="relative">
               <button 
                 onClick={() => setIsNotificationOpen(!isNotificationOpen)}
-                className="p-1.5 text-gray-400 hover:text-gray-500 rounded-full hover:bg-slate-50 transition relative focus:outline-none"
+                className="p-1.5 text-gray-400 hover:text-gray-500 rounded-full hover:bg-slate-50 transition relative focus:outline-none cursor-pointer"
               >
                 <span className="sr-only">Notification</span>
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
-                <span className="absolute top-1.5 right-1.5 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+                {/* 🔥 DYNAMIC BADGE RED DOT CONDITION MATCHING */}
+                {hasUnread && (
+                  <span className="absolute top-1.5 right-1.5 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
+                )}
               </button>
 
               {/* Notification Overlay Panel */}
@@ -105,22 +107,43 @@ export default function Navbar() {
                   <div className="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-slate-100">
                     Notifications Log
                   </div>
-                  <div className="px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 border-b border-slate-50 cursor-pointer">
-                    <p className="font-semibold">Document Approved</p>
-                    <p className="text-xs text-gray-400 mt-0.5">Your passport scan was verified successfully.</p>
+                  
+                  {/* 🔥 DYNAMIC INLINE ITERATION OF PREVIEW CORES */}
+                  <div className="divide-y divide-slate-50 max-h-60 overflow-y-auto">
+                    {notifications.map((notif) => (
+                      <div key={notif.id} className="px-4 py-3 text-sm hover:bg-slate-50 cursor-pointer">
+                        <div className="flex items-center space-x-1.5">
+                          <p className="font-bold text-slate-800">{notif.title}</p>
+                          {!notif.is_read && <span className="h-1 w-1 bg-violet-600 rounded-full" />}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">{notif.description}</p>
+                      </div>
+                    ))}
+                    
+                    {notifications.length === 0 && (
+                      <div className="px-4 py-6 text-center text-xs text-gray-400 font-medium">
+                        No recent account activities.
+                      </div>
+                    )}
                   </div>
-                  <div className="px-4 py-2 text-center text-xs text-violet-600 font-bold hover:underline cursor-pointer pt-3">
+
+                  {/* 🔥 LINK REDIRECT OUT ROW TO DEDICATED MASTER LOG */}
+                  <Link 
+                    to="/notifications" 
+                    onClick={() => setIsNotificationOpen(false)}
+                    className="block text-center text-xs text-violet-600 font-bold hover:underline cursor-pointer pt-3 pb-1 border-t border-slate-100 text-decoration-none"
+                  >
                     View All Activity
-                  </div>
+                  </Link>
                 </div>
               )}
             </div>
 
-            {/* PROFILE ITEM */}
+            {/* PROFILE DROPDOWN ITEM */}
             <div className="relative">
               <button 
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
-                className="flex text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 items-center space-x-2 border border-slate-200 p-1.5 pr-3 hover:bg-slate-50 transition"
+                className="flex text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 items-center space-x-2 border border-slate-200 p-1.5 pr-3 hover:bg-slate-50 transition cursor-pointer"
               >
                 <div className="w-8 h-8 rounded-lg bg-violet-600 text-white flex items-center justify-center font-bold text-sm uppercase shadow-sm">
                   {user?.fullname ? user.fullname.charAt(0) : '?'}
@@ -133,18 +156,14 @@ export default function Navbar() {
                 </svg>
               </button>
 
-              {/* Profile Context Dropdown */}
               {isProfileOpen && (
                 <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-xl shadow-lg bg-white ring-1 ring-black ring-opacity-5 border border-slate-100 py-1 z-50">
                   <div className="px-4 py-2.5 text-xs border-b border-slate-100 bg-slate-50/50">
                     Active Account: <br /><strong className="text-slate-800 break-all">{user?.email}</strong>
                   </div>
-                  <Link to="/profile" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-semibold">Profile</Link>
-                  <Link to="/settings" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium">Account Settings</Link>
-                  <button 
-                    onClick={logoutUser}
-                    className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 font-bold border-t border-slate-100"
-                  >
+                  <Link to="/profile" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-semibold text-decoration-none">Profile</Link>
+                  <Link to="/settings" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium text-decoration-none">Account Settings</Link>
+                  <button onClick={logoutUser} className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 font-bold border-t border-slate-100 cursor-pointer">
                     Logout
                   </button>
                 </div>
@@ -153,12 +172,8 @@ export default function Navbar() {
 
           </div>
 
-          {/* MOBILE RESPONSIVE HAMBURGER ACTION TOGGLE */}
           <div className="flex items-center md:hidden">
-            <button 
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="inline-flex items-center justify-center p-2 rounded-lg text-gray-400 hover:text-gray-500 hover:bg-slate-50 focus:outline-none"
-            >
+            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="inline-flex items-center justify-center p-2 rounded-lg text-gray-400 hover:text-gray-500 hover:bg-slate-50 focus:outline-none">
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 {isMobileMenuOpen ? (
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -172,23 +187,20 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* MOBILE CONTAINER SLIDEOUT BLOCK */}
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white border-t border-slate-100 px-4 pt-2 pb-4 space-y-1 shadow-inner">
-          <Link to="/user-dashboard" className="block px-3 py-2 rounded-lg text-base font-bold bg-violet-50 text-violet-700">Dashboard</Link>
-          <Link to="/documents" className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50">My Documents</Link>
-          <Link to="/upload" className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50">Upload Document</Link>
-          <button onClick={() => setIsNotificationOpen(!isNotificationOpen)} className="block w-full text-left px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50">Notification</button>
-          <Link to="/profile" className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50">Profile</Link>
-          <Link to="/support" className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50">Help & Support</Link>
+          <Link to="/user-dashboard" className="block px-3 py-2 rounded-lg text-base font-bold bg-violet-50 text-violet-700 text-decoration-none">Dashboard</Link>
+          <Link to="/documents" className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">My Documents</Link>
+          <Link to="/upload" className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">Upload Document</Link>
+          {/* Mobile points straight to notifications center */}
+          <Link to="/notifications" className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">Notifications Center</Link>
+          <Link to="/profile" className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">Profile</Link>
+          <Link to="/support" className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">Help & Support</Link>
           
           <div className="pt-4 border-t border-slate-200 mt-2">
             <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Logged Identity</p>
             <p className="px-3 text-sm font-medium text-slate-800 mt-1 break-all">{user?.email || 'Loading...'}</p>
-            <button 
-              onClick={logoutUser}
-              className="block w-full text-left px-3 py-2 text-base font-bold text-red-600 mt-2 hover:bg-red-50 rounded-lg"
-            >
+            <button onClick={logoutUser} className="block w-full text-left px-3 py-2 text-base font-bold text-red-600 mt-2 hover:bg-red-50 rounded-lg cursor-pointer">
               Sign Out
             </button>
           </div>

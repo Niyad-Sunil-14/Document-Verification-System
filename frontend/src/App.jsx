@@ -16,6 +16,7 @@ import GuestRoutes from './routes/GuestRoute';
 import RegisterOTP from './components/auth/RegisterOTP';
 import AllDocuments from './components/pages/admin/AllDocuments';
 import AdminDocumentDetails from './components/pages/admin/AdminDocumentDetails';
+import Notification from './components/pages/user/Notification';
 
 function App() {
   return (
@@ -87,6 +88,12 @@ function App() {
                 <UserProfile/>
               </ProtectedRoute>
             }
+          />
+          <Route path="/notifications" element={
+            <ProtectedRoute allowedRoles={['USER']}>
+                <Notification/>
+              </ProtectedRoute>
+            }            
           />
 
         </Routes>
