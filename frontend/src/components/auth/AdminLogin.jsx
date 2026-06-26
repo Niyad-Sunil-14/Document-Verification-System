@@ -7,6 +7,12 @@ const AdminLogin = () => {
   const [serverError, setServerError] = useState("");
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
   const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
+
+  const eyes = () => {
+    setShowPassword(!showPassword);
+  };
+
 
   const onSubmit = async (data) => {
     setServerError("");
@@ -74,17 +80,38 @@ const AdminLogin = () => {
             </div>
 
             {/* Password Input */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1 ml-1 uppercase">Secure Key</label>
-              <input
-                {...register("password", { required: "Password is required" })}
-                type="password"
-                placeholder="••••••••"
-                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all placeholder-gray-400 ${
-                  errors.password || serverError ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                }`}
-              />
-              {errors.password && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.password.message}</p>}
+            <div className="relative"> {/* 🔥 Added 'relative' here to anchor the absolute button */}
+              <label className="block text-xs font-semibold text-gray-500 mb-1 ml-1 uppercase">
+                Password
+              </label>
+              
+              <div className="relative"> {/* 🔥 Extra relative wrapper to bind the input and button together */}
+                <input
+                  {...register("password", { required: "Password is required" })}
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  className={`w-full pl-4 pr-12 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all placeholder-gray-400 ${
+                    errors.password || serverError ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                  }`}
+                />
+                
+                {/* 🔥 Adjusted top positioning to center perfectly vertical inside the py-3 input */}
+                <button 
+                  onClick={eyes} 
+                  type="button" 
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition cursor-pointer flex items-center justify-center"
+                >
+                  {showPassword ? (
+                    <i className="fa-regular fa-eye"></i>
+                  ) : (
+                    <i className="fa-regular fa-eye-slash"></i>
+                  )}                                  
+                </button>
+              </div>
+
+              {errors.password && (
+                <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.password.message}</p>
+              )}
             </div>
 
             <button

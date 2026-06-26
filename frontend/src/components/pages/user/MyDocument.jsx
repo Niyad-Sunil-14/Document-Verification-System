@@ -38,7 +38,6 @@ export default function MyDocument() {
   // Dynamic Badge Styling Utility Function
   const getStatusBadge = (status) => {
     const badges = {
-      SUCCESS: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
       REJECTED: 'bg-rose-50 text-rose-700 border-rose-200',
@@ -124,7 +123,7 @@ export default function MyDocument() {
 
           {/* Filter Selection Tabs */}
           <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-bold text-gray-500 w-full md:w-auto overflow-x-auto">
-            {['ALL', 'PENDING', 'SUCCESS', 'REJECTED'].map((status) => (
+            {['ALL', 'PENDING', 'APPROVED', 'REJECTED'].map((status) => (
               <button
                 key={status}
                 onClick={() => setFilterStatus(status)}

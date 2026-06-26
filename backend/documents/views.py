@@ -242,17 +242,17 @@ class DocumentDetailView(APIView):
                 if old_status != new_status:
                     # Case A: Admin altered the verification status
                     if new_status == "APPROVED":
-                        notification_title = f"✅ {doc_type_clean} Approved"
+                        notification_title = f"{doc_type_clean} Approved"
                         notification_desc = f"Your uploaded {doc_type_clean.lower()} has been verified secure by our compliance team."
                     elif new_status == "REJECTED":
-                        notification_title = f"❌ {doc_type_clean} Rejected"
+                        notification_title = f"{doc_type_clean} Rejected"
                         notification_desc = f"Your uploaded {doc_type_clean.lower()} failed our clearance checks."
                     else:
-                        notification_title = f"ℹ️ {doc_type_clean} Status Updated"
+                        notification_title = f"{doc_type_clean} Status Updated"
                         notification_desc = f"Your document status has been updated to {new_status}."
                 else:
                     # Case B: Admin only updated/sent audit remarks notes without changing status
-                    notification_title = f"💬 Audit Notes Appended: {doc_type_clean}"
+                    notification_title = f"Audit Notes Appended: {doc_type_clean}"
                     notification_desc = "An administrator has added review remarks to your document registration profile."
 
                 # If there are remarks, append them neatly to the notification body
@@ -264,7 +264,8 @@ class DocumentDetailView(APIView):
                     user=updated_document.user,  # 🔥 Crucial: Routes directly to the user who owns the file
                     title=notification_title,
                     description=notification_desc,
-                    is_read=False
+                    is_read=False,
+                    document=updated_document # 🔥 FIX: Pass the updated document instance to the relation field
                 )
                 
                 return Response(serializer.data, status=status.HTTP_200_OK)

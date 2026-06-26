@@ -61,8 +61,8 @@ export default function AllDocuments() {
 
   // 🔥 NEW: Color-coded styling utility for the global text quality accuracy column
   const getAccuracyBadgeStyles = (score) => {
-    if (score >= 85) return 'bg-emerald-50 text-emerald-700 border-emerald-200'; // High Quality
-    if (score >= 60) return 'bg-amber-50 text-amber-700 border-amber-200';     // Medium Quality Warning
+    if (score >= 90) return 'bg-emerald-50 text-emerald-700 border-emerald-200'; // High Quality
+    if (score >= 70) return 'bg-amber-50 text-amber-700 border-amber-200';     // Medium Quality Warning
     return 'bg-rose-50 text-rose-700 border-rose-200';                        // Low Quality Alarm
   };
 

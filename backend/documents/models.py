@@ -20,7 +20,7 @@ class Document(models.Model):
 
     STATUS_CHOICES = [
         ('PENDING', 'Pending Review'),
-        ('APPROVED', 'Approved by Admin'),
+        ('APPROVED', 'Approved by DocVerify'),
         ('REJECTED', 'Rejected'),
     ]
 
@@ -105,6 +105,15 @@ class Notification(models.Model):
     description = models.TextField()
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # 🔥 FIX: Add the missing document connection field here!
+    document = models.ForeignKey(
+        Document, 
+        on_delete=models.SET_NULL, # If a document gets deleted, keep the notification log history
+        null=True, 
+        blank=True,
+        related_name='notifications'
+    )
 
     class Meta:
         ordering = ['-created_at']

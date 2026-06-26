@@ -68,10 +68,11 @@ class DocumentDetailSerializer(serializers.ModelSerializer):
 
 class NotificationSerializer(serializers.ModelSerializer):
     created_at_human = serializers.SerializerMethodField()
+    document_id = serializers.PrimaryKeyRelatedField(source='document', read_only=True)
 
     class Meta:
         model = Notification
-        fields = ['id', 'title', 'description', 'is_read', 'created_at', 'created_at_human']
+        fields = ['id', 'title', 'description','document_id','is_read', 'created_at', 'created_at_human']
 
     def get_created_at_human(self, obj):
         return obj.created_at.strftime("%b %d, %Y at %I:%M %p")
