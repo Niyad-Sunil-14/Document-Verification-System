@@ -24,7 +24,6 @@ class Document(models.Model):
         ('REJECTED', 'Rejected'),
     ]
 
-    # 🔥 NEW: Choices matrix tracking the raw Tesseract/PDF parsing health pipeline
     OCR_STATUS_CHOICES = [
         ('PROCESSED', 'OCR Processed'),
         ('FAILED', 'OCR Failed'),
@@ -41,7 +40,6 @@ class Document(models.Model):
     )
     file = models.URLField(max_length=1000)
     
-    # Keeping your text field to store the filename string
     filename = models.CharField(max_length=255, blank=True, default="")
     
     status = models.CharField(
@@ -51,7 +49,6 @@ class Document(models.Model):
         help_text="The current processing status of the file."
     )
 
-    # 🔥 NEW FIELD: Keeps track of OCR engine health independently
     ocr_status = models.CharField(
         max_length=20,
         choices=OCR_STATUS_CHOICES,
@@ -85,8 +82,7 @@ class Document(models.Model):
     def __str__(self):
         return f"{self.document_type} - {self.user.email} ({self.status} | OCR: {self.ocr_status})"
 
-    # 🔥 FIXED PROPERTY DESCRIPTOR CLASH:
-    # Changed the method name to 'computed_filename' so it does not destroy your 'filename' database column entry!
+
     @property
     def computed_filename(self):
         if self.filename:
@@ -106,10 +102,9 @@ class Notification(models.Model):
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     
-    # 🔥 FIX: Add the missing document connection field here!
     document = models.ForeignKey(
         Document, 
-        on_delete=models.SET_NULL, # If a document gets deleted, keep the notification log history
+        on_delete=models.SET_NULL, 
         null=True, 
         blank=True,
         related_name='notifications'

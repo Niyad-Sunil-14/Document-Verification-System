@@ -13,7 +13,6 @@ class DocumentUploadSerializer(serializers.ModelSerializer):
 class DocumentListSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     file = serializers.CharField(read_only=True) 
-    # 🔥 ADDED: Pulls the username string directly for your React columns table matching
     username = serializers.ReadOnlyField(source='user.fullname')
     uploaded_at = serializers.SerializerMethodField()
 
@@ -40,7 +39,6 @@ class DocumentListSerializer(serializers.ModelSerializer):
 
 
 class DocumentDetailSerializer(serializers.ModelSerializer):
-    # 🔥 ADDED: Optional safeguard case if you need the username on your detailed audit pages later
     username = serializers.ReadOnlyField(source='user.fullname')
     file = serializers.CharField(read_only=True)
     uploaded_at = serializers.SerializerMethodField()

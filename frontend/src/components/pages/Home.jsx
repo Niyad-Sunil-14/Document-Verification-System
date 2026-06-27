@@ -1,12 +1,22 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router';
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 
 export default function Home() {
   const [formState, setFormState] = useState({ name: '', email: '', message: '' });
+  
+  // 🔥 NEW STATE: Tracks user session login profile metrics 
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // 🔥 EFFECT BLOCK: Check local user vaults context on component mount
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      setIsLoggedIn(true);
+    }
+  }, []);
 
   const handleContactSubmit = (e) => {
     e.preventDefault();
-    // Handle form submission logic here
     alert('Thank you for contacting us! We will get back to you shortly.');
     setFormState({ name: '', email: '', message: '' });
   };
@@ -47,17 +57,31 @@ export default function Home() {
                 </a>
               </div>
               
+              {/* 🔥 DYNAMIC AUTH BUTTON MATRIX ROW */}
               <div className='flex gap-2.5 items-center'>
-                <Link to='/login'
-                    className="text-sm font-semibold text-gray-700 hover:text-blue-600 px-4 py-2 transition border border-gray-300 hover:border-blue-600 rounded-xl"
-                >
-                    Login
-                </Link>
-                <Link to='/register'
-                    className="inline-flex items-center text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl shadow-sm transition"
-                >
-                    Sign Up
-                </Link>
+                {isLoggedIn ? (
+                  // Rendered link path if authentication token validation passes
+                  <Link 
+                    to='/user-dashboard'
+                    className="inline-flex items-center text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-xl shadow-sm transition transform active:scale-[0.98] text-decoration-none"
+                  >
+                    <span>Go to Your Account</span>
+                  </Link>
+                ) : (
+                  // Rendered default configuration options for guest sessions
+                  <>
+                    <Link to='/login'
+                        className="text-sm font-semibold text-gray-700 hover:text-blue-600 px-4 py-2 transition border border-gray-300 hover:border-blue-600 rounded-xl text-decoration-none"
+                    >
+                        Login
+                    </Link>
+                    <Link to='/register'
+                        className="inline-flex items-center text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl shadow-sm transition text-decoration-none"
+                    >
+                        Sign Up
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
 
@@ -83,13 +107,13 @@ export default function Home() {
 
             {/* Action Buttons */}
             <div className="mt-10 flex flex-col sm:flex-row justify-center lg:justify-start items-center gap-4">
-              <Link to='/register'
-                className="w-full sm:w-auto px-8 py-4 bg-gray-900 text-white font-bold rounded-xl shadow-md hover:bg-gray-800 transition text-center"
+              <Link to={isLoggedIn ? '/user-dashboard' : '/register'}
+                className="w-full sm:w-auto px-8 py-4 bg-gray-900 text-white font-bold rounded-xl shadow-md hover:bg-gray-800 transition text-center text-decoration-none"
               >
-                Create Free Account
+                {isLoggedIn ? 'Enter App Dashboard' : 'Create Free Account'}
               </Link>
               <a href="#how-it-works"
-                className="w-full sm:w-auto px-8 py-4 bg-white border border-gray-300 text-gray-700 font-bold rounded-xl hover:bg-gray-50 transition text-center shadow-sm"
+                className="w-full sm:w-auto px-8 py-4 bg-white border border-gray-300 text-gray-700 font-bold rounded-xl hover:bg-gray-50 transition text-center shadow-sm text-decoration-none"
               >
                 Learn More
               </a>
@@ -115,7 +139,6 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
-            {/* Step 1 */}
             <div className="text-center p-6 relative">
               <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-2xl font-bold mx-auto mb-6 border border-indigo-100">
                 1
@@ -126,7 +149,6 @@ export default function Home() {
               </p>
             </div>
 
-            {/* Step 2 */}
             <div className="text-center p-6 relative">
               <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-2xl font-bold mx-auto mb-6 border border-indigo-100">
                 2
@@ -137,7 +159,6 @@ export default function Home() {
               </p>
             </div>
 
-            {/* Step 3 */}
             <div className="text-center p-6 relative">
               <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-2xl font-bold mx-auto mb-6 border border-indigo-100">
                 3
@@ -164,70 +185,40 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Feature 1 */}
             <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition">
-              <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-xl mb-6">
-                ⚡
-              </div>
+              <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-xl mb-6">⚡</div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">Automated OCR Engine</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">
-                Our backend isolates and parses typed characters directly out of uploaded images and reads structured data blocks seamlessly.
-              </p>
+              <p className="text-sm text-gray-500 leading-relaxed"> Our backend isolates and parses typed characters directly out of uploaded images and reads structured data blocks seamlessly.</p>
             </div>
 
-            {/* Feature 2 */}
             <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition">
-              <div className="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-xl mb-6">
-                👑
-              </div>
+              <div className="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-xl mb-6">👑</div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">Admin Compliance Verification</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">
-                Extracted data remains locked to administrators for manual verification, approval queues, or rejection auditing flags.
-              </p>
+              <p className="text-sm text-gray-500 leading-relaxed">Extracted data remains locked to administrators for manual verification, approval queues, or rejection auditing flags.</p>
             </div>
 
-            {/* Feature 3 */}
             <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition">
-              <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center text-xl mb-6">
-                🔒
-              </div>
+              <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center text-xl mb-6">🔒</div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">Dynamic Role Access</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">
-                Our dynamic endpoints securely mask underlying model information, guaranteeing end-users never leak underlying admin text data.
-              </p>
+              <p className="text-sm text-gray-500 leading-relaxed">Our dynamic endpoints securely mask underlying model information, guaranteeing end-users never leak underlying admin text data.</p>
             </div>
 
-            {/* Feature 4 */}
             <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition">
-              <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-xl mb-6">
-                📊
-              </div>
+              <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-xl mb-6">📊</div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">Audit Trail Analytics</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">
-                Track full version histories, processing time metrics, and administrative touches on every document payload seamlessly.
-              </p>
+              <p className="text-sm text-gray-500 leading-relaxed">Track full version histories, processing time metrics, and administrative touches on every document payload seamlessly.</p>
             </div>
 
-            {/* Feature 5 */}
             <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition">
-              <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-xl mb-6">
-                🌍
-              </div>
+              <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-xl mb-6">🌍</div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">Multi-Format Parsing</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">
-                Accept uploads stretching from standard PNG/JPG snapshots to complex multi-page data sheets and nested digital PDFs.
-              </p>
+              <p className="text-sm text-gray-500 leading-relaxed">Accept uploads stretching from standard PNG/JPG snapshots to complex multi-page data sheets and nested digital PDFs.</p>
             </div>
 
-            {/* Feature 6 */}
             <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition">
-              <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center text-xl mb-6">
-                🛡️
-              </div>
+              <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center text-xl mb-6">🛡️</div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">JWT Integrity Layer</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">
-                Backed by Django REST stateless state variables, preventing session spoofing, data intersection, or structural leaks.
-              </p>
+              <p className="text-sm text-gray-500 leading-relaxed">Backed by Django REST stateless state variables, preventing session spoofing, data intersection, or structural leaks.</p>
             </div>
           </div>
         </div>
@@ -239,33 +230,15 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
               <span className="text-sm font-bold tracking-wider uppercase text-blue-600">Our Mission</span>
-              <h2 className="text-3xl font-bold text-gray-900 tracking-tight mt-2 mb-6">
-                Bridging data ease with ironclad enterprise security.
-              </h2>
-              <p className="text-gray-600 mb-4 leading-relaxed">
-                Founded at the intersection of machine learning intelligence and strict compliance standards, DocVerify provides tools to make compliance painless. We specialize in fast-turnaround OCR, custom validation parameters, and secure server-to-client processing.
-              </p>
-              <p className="text-gray-600 leading-relaxed">
-                Today, thousands of applications process critical KYC requirements, driver records, and secure billing sheets inside our isolated ecosystem. We run continuous auditing loops so your security framework operates flawlessly.
-              </p>
+              <h2 className="text-3xl font-bold text-gray-900 tracking-tight mt-2 mb-6">Bridging data ease with ironclad enterprise security.</h2>
+              <p className="text-gray-600 mb-4 leading-relaxed">Founded at the intersection of machine learning intelligence and strict compliance standards, DocVerify provides tools to make compliance painless. We specialize in fast-turnaround OCR, custom validation parameters, and secure server-to-client processing.</p>
+              <p className="text-gray-600 leading-relaxed">Today, thousands of applications process critical KYC requirements, driver records, and secure billing sheets inside our isolated ecosystem.</p>
             </div>
             <div className="grid grid-cols-2 gap-6">
-              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                <p className="text-3xl font-extrabold text-blue-600">99.4%</p>
-                <p className="text-sm font-semibold text-gray-700 mt-1">OCR Match Accuracy</p>
-              </div>
-              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                <p className="text-3xl font-extrabold text-indigo-600">&lt; 2s</p>
-                <p className="text-sm font-semibold text-gray-700 mt-1">Average Turnaround</p>
-              </div>
-              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                <p className="text-3xl font-extrabold text-purple-600">M+</p>
-                <p className="text-sm font-semibold text-gray-700 mt-1">Scans Managed Safely</p>
-              </div>
-              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                <p className="text-3xl font-extrabold text-emerald-600">AES</p>
-                <p className="text-sm font-semibold text-gray-700 mt-1">256-Bit Cryptography</p>
-              </div>
+              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100"><p className="text-3xl font-extrabold text-blue-600">99.4%</p><p className="text-sm font-semibold text-gray-700 mt-1">OCR Match Accuracy</p></div>
+              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100"><p className="text-3xl font-extrabold text-indigo-600">&lt; 2s</p><p className="text-sm font-semibold text-gray-700 mt-1">Average Turnaround</p></div>
+              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100"><p className="text-3xl font-extrabold text-purple-600">M+</p><p className="text-sm font-semibold text-gray-700 mt-1">Scans Managed Safely</p></div>
+              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100"><p className="text-3xl font-extrabold text-emerald-600">AES</p><p className="text-sm font-semibold text-gray-700 mt-1">256-Bit Cryptography</p></div>
             </div>
           </div>
         </div>
@@ -276,22 +249,11 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
             <div className="lg:col-span-5">
-              <h2 className="text-3xl font-bold text-gray-900 tracking-tight mb-4">
-                Get in touch with our security team
-              </h2>
-              <p className="text-gray-500 mb-8 max-w-md leading-relaxed">
-                Have questions regarding structural operations, architecture requirements, scaling integrations, or custom enterprise terms? Drop us a line.
-              </p>
-              
+              <h2 className="text-3xl font-bold text-gray-900 tracking-tight mb-4">Get in touch with our security team</h2>
+              <p className="text-gray-500 mb-8 max-w-md leading-relaxed">Have questions regarding structural operations, architecture requirements, scaling integrations, or custom enterprise terms? Drop us a line.</p>
               <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">📍</div>
-                  <span className="text-sm text-gray-600 font-medium">Kochi, Suite 400, Kerala, India</span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center">✉️</div>
-                  <span className="text-sm text-gray-600 font-medium">support@docverify.com</span>
-                </div>
+                <div className="flex items-center gap-4"><div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">📍</div><span className="text-sm text-gray-600 font-medium">Kochi, Suite 400, Kerala, India</span></div>
+                <div className="flex items-center gap-4"><div className="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center">✉️</div><span className="text-sm text-gray-600 font-medium">support@docverify.com</span></div>
               </div>
             </div>
 
@@ -300,44 +262,18 @@ export default function Home() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Full Name</label>
-                    <input 
-                      type="text" 
-                      required
-                      value={formState.name}
-                      onChange={(e) => setFormState({...formState, name: e.target.value})}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 text-sm transition"
-                      placeholder="Your Name"
-                    />
+                    <input type="text" required value={formState.name} onChange={(e) => setFormState({...formState, name: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 text-sm transition" placeholder="Your Name"/>
                   </div>
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Email Address</label>
-                    <input 
-                      type="email" 
-                      required
-                      value={formState.email}
-                      onChange={(e) => setFormState({...formState, email: e.target.value})}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 text-sm transition"
-                      placeholder="Your Email"
-                    />
+                    <input type="email" required value={formState.email} onChange={(e) => setFormState({...formState, email: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 text-sm transition" placeholder="Your Email"/>
                   </div>
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Message</label>
-                  <textarea 
-                    rows="4" 
-                    required
-                    value={formState.message}
-                    onChange={(e) => setFormState({...formState, message: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 text-sm transition"
-                    placeholder="How can we help optimize your system?"
-                  ></textarea>
+                  <textarea rows="4" required value={formState.message} onChange={(e) => setFormState({...formState, message: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 text-sm transition" placeholder="How can we help optimize your system?"></textarea>
                 </div>
-                <button 
-                  type="submit"
-                  className="w-full py-3 px-6 text-white font-bold bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm transition text-center text-sm"
-                >
-                  Send Inquiry
-                </button>
+                <button type="submit" className="w-full py-3 px-6 text-white font-bold bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm transition text-center text-sm">Send Inquiry</button>
               </form>
             </div>
           </div>
@@ -354,11 +290,12 @@ export default function Home() {
             Create an account in seconds. Test out image scanning configurations and set up custom administrative verification logic paths today.
           </p>
           <div className="mt-8">
+            {/* 🔥 BONUS: Hero Action Button automatically updates dynamically as well */}
             <Link
-              to="/register"
-              className="inline-block px-6 py-3 bg-white text-blue-700 font-bold rounded-xl shadow-md hover:bg-blue-50 transition"
+              to={isLoggedIn ? "/user-dashboard" : "/register"}
+              className="inline-block px-6 py-3 bg-white text-blue-700 font-bold rounded-xl shadow-md hover:bg-blue-50 transition text-decoration-none"
             >
-              Sign Up For Free
+              {isLoggedIn ? "Go to My Dashboard →" : "Sign Up For Free"}
             </Link>
           </div>
         </div>
