@@ -15,7 +15,8 @@ from django.core.mail import send_mail
 from django.contrib.auth import get_user_model
 import random
 import logging
-from django.contrib.auth import authenticate
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+import cloudinary.uploader
 # Create your views here.
 
 User = get_user_model()
@@ -202,25 +203,53 @@ class LogoutView(APIView):
 
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
+    # 🔥 FIX 1: Ensure view handles both multipart image payloads and raw JSON updates
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get(self, request):
-        return Response({
-            "email": request.user.email,
-            "fullname": getattr(request.user, 'fullname', request.user.get_full_name()),
-            
-            # 🔥 CRUCIAL: Make sure these two lines are returning data to your React frontend
-            "is_staff": request.user.is_staff,
-            "is_superuser": request.user.is_superuser
-        })
-    
-    def put(self, request, *args, **kwargs):
-        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        serializer = UserProfileSerializer(request.user)
+        return Response(serializer.data)
+
+    def patch(self, request):
+        user = request.user
         
+        # 🔥 FIX 2: Check for incoming avatar file upgrades explicitly
+        if 'profile_picture' in request.FILES:
+            try:
+                uploaded_file = request.FILES['profile_picture']
+                
+                # Push the binary image stream directly to Cloudinary
+                upload_result = cloudinary.uploader.upload(
+                    uploaded_file,
+                    folder="user_profiles/",
+                    resource_type="image"
+                )
+                
+                # Save the secure URL string inside the user instance field
+                user.profile_picture = upload_result.get("secure_url")
+                user.save()
+                
+                # Return the updated instance via your serializer immediately
+                serializer = UserProfileSerializer(user)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+                
+            except Exception as upload_err:
+                return Response(
+                    {"detail": f"Avatar upload matrix failed: {str(upload_err)}"}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+        # Fallback processing loop for normal text profile changes (like changing fullnames)
+        serializer = UserProfileSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
             
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # If you are targeting PUT requests from React form submissions, mirror the logic:
+    def put(self, request):
+        return self.patch(request)
     
 
 
@@ -242,3 +271,76 @@ class ChangePasswordView(APIView):
             )
             
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+
+
+
+
+class RequestEmailUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        # 1. Extract and sanitize incoming email payload strings
+        raw_email = request.data.get('email', '')
+        if not raw_email:
+            return Response({"detail": "New email parameter required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        new_email = raw_email.strip().lower()
+
+        # 2. DEFENSIVE CHECK: Prevent users from resetting to their current email
+        if new_email == request.user.email.lower():
+            return Response(
+                {"detail": "This is already your registered email address."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 3. UNIQUENESS CHECK: Ensure the email does not exist anywhere else in the DB
+        if User.objects.filter(email__iexact=new_email).exists():
+            return Response(
+                {"detail": "This email address is already in use by another account."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # 4. GENERATION: Compile the 6-digit confirmation string token
+        verification_code = f"{random.randint(100000, 999999)}"
+        
+        # 5. CACHE BUFFER: Store email + token mapping tied to user ID session context for 10 min
+        cache.set(
+            f"email_otp_{request.user.id}", 
+            {"email": new_email, "code": verification_code}, 
+            timeout=600
+        )
+        
+        # 6. DISPATCH: Fire transactional security email directly to target address
+        send_mail(
+            subject="DocVerify Security Center: Confirm Your New Email Address",
+            message=f"Your confirmation token is: {verification_code}. It will expire in 10 minutes.",
+            from_email="security@docverify.com",
+            recipient_list=[new_email],
+            fail_silently=False,
+        )
+        
+        return Response(
+            {"detail": "Verification security token dispatched successfully."}, 
+            status=status.HTTP_200_OK
+        )
+
+class ConfirmEmailUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        code_submitted = request.data.get('code')
+        cached_data = cache.get(f"email_otp_{request.user.id}")
+        
+        if not cached_data or cached_data["code"] != code_submitted:
+            return Response({"detail": "Invalid or expired authorization code parameters."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Code matches, update user instances safely
+        user = request.user
+        user.email = cached_data["email"]
+        user.save()
+        
+        # Evict cache tokens
+        cache.delete(f"email_otp_{user.id}")
+        return Response({"detail": "Email records modified securely.", "email": user.email}, status=status.HTTP_200_OK)

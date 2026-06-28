@@ -27,9 +27,9 @@ const Login = () => {
 
   // Valid user, store refresh token and proceed
   localStorage.setItem('refresh_token', response.data.refresh);
-navigate('/user-dashboard', { replace: true });
+      navigate('/user-dashboard', { replace: true });
     } catch (err) {
-      const errorMsg = err.response?.data?.detail || "Invalid Email or Password";
+      const errorMsg = "Invalid Email or Password";
       setServerError(errorMsg);
     }
   };

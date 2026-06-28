@@ -19,4 +19,8 @@ urlpatterns = [
 
     path('users/profile/',UserProfileView.as_view(),name='user-profile'),
     path('users/change-password/', ChangePasswordView.as_view(), name='change-password'),
+    
+    path('users/request-email-update/', RequestEmailUpdateView.as_view(), name='request-email-update'),
+    path('users/confirm-email-update/', ConfirmEmailUpdateView.as_view(), name='confirm-email-update'),
+
 ]

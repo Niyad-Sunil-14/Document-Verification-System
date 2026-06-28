@@ -3,11 +3,18 @@ from . models import CustomUser
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
 
-class UserSerializer(serializers.ModelSerializer):
-    date_joined = serializers.DateTimeField(format="%Y-%m-%d", read_only=True)
+class UserProfileSerializer(serializers.ModelSerializer):
+    joined_date = serializers.SerializerMethodField()
+
     class Meta:
         model = CustomUser
-        fields = ['id','email','fullname','role','date_joined']
+        fields = ['id', 'username', 'email', 'fullname', 'profile_picture', 'joined_date', 'is_staff']
+        read_only_fields = ['username', 'is_staff']
+
+    def get_joined_date(self, obj):
+        if obj.date_joined:
+            return obj.date_joined.strftime("%B %d, %Y")
+        return "N/A"
 
 
 
