@@ -16,6 +16,7 @@ from pytesseract import Output
 from pdf2image import convert_from_path 
 import cv2
 import numpy as np
+from rest_framework.pagination import PageNumberPagination
 
 import os
 from .models import Document,Notification
@@ -160,20 +161,63 @@ class DocumentUploadView(APIView):
                 )
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
 
+
+
+class DocumentStandardPagination(PageNumberPagination):
+    page_size = 10                  
+    page_size_query_param = 'size'  
+    max_page_size = 100
 
 class DocumentListView(APIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = DocumentListSerializer
+    pagination_class = DocumentStandardPagination
 
     def get(self, request, *args, **kwargs):
+        # 1. Base Queryset Filter by Role Access
         if request.user.is_staff:
-            documents = Document.objects.all()
+            queryset = Document.objects.all()
         else:
-            documents = Document.objects.filter(user=request.user)
+            queryset = Document.objects.filter(user=request.user)
 
-        serializer = DocumentListSerializer(documents, many=True)
+        # 2. Extract Query Parameters from Front-End
+        status_filter = request.query_params.get('status', 'ALL')
+        search_term = request.query_params.get('search', '').strip()
+
+        # 3. Apply Filters to the Queryset
+        if status_filter != 'ALL':
+            queryset = queryset.filter(Q(status=status_filter) | Q(ocr_status=status_filter))
+
+        if search_term:
+            queryset = queryset.filter(
+                Q(user__username__icontains=search_term) |
+                Q(user__fullname__icontains=search_term) |
+                Q(document_type__icontains=search_term) |
+                Q(id__icontains=search_term)
+            )
+
+        # Order by newest uploads globally
+        queryset = queryset.order_by('-uploaded_at')
+
+        # 4. 🔥 ROLE-BASED PAGINATION ROUTING
+        # If it is NOT a staff member (i.e., your standard user client), BYPASS pagination entirely
+        if not request.user.is_staff:
+            serializer = self.serializer_class(queryset, many=True)
+            # Returns a simple flat list array [] directly to the client dashboard
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        # --- ADMIN ONLY PAGINATION LOGIC ---
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        
+        if page is not None:
+            serializer = self.serializer_class(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = self.serializer_class(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-    
 
 
 class DocumentDetailView(APIView):

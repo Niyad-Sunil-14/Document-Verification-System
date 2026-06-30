@@ -18,7 +18,7 @@ export default function UserDashboard() {
     const fetchList = async () => {
       try {
         const response = await axiosInstance.get('documents/list/');
-        setDocuments(response.data);
+        setDocuments(response.data.results || response.data || []);
       } catch (err) {
         console.error("Dashboard table collection fetch failed:", err);
       }

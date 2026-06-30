@@ -14,6 +14,14 @@ export default function AllDocuments() {
   const [error, setError] = useState('');
   const [adminEmail, setAdminEmail] = useState('admin@docverify.io');
 
+  // PAGINATION STATES
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrevious, setHasPrevious] = useState(false);
+
+  const ITEMS_PER_PAGE = 10;
+
   // 2. DATA SYNCHRONIZATION HOOK
   useEffect(() => {
     const fetchDocumentsData = async () => {
@@ -21,8 +29,16 @@ export default function AllDocuments() {
         setLoading(true);
         setError('');
 
-        const docsResponse = await axiosInstance.get('documents/list/');
-        setDocuments(docsResponse.data);
+        // Build URL including filters AND the current page index
+        const url = `documents/list/?status=${statusFilter}&search=${encodeURIComponent(searchTerm)}&page=${currentPage}`;
+
+        const docsResponse = await axiosInstance.get(url);
+        
+        // Since backend always returns a paginated structure now, parse results uniformly:
+        setDocuments(docsResponse.data.results || []);
+        setTotalCount(docsResponse.data.count || 0);
+        setHasNext(!!docsResponse.data.next);
+        setHasPrevious(!!docsResponse.data.previous);
 
         const profileResponse = await axiosInstance.get('users/profile/');
         if (profileResponse.data?.email) {
@@ -36,10 +52,26 @@ export default function AllDocuments() {
       }
     };
 
-    fetchDocumentsData();
-  }, []);
+    const delayDebounceFn = setTimeout(() => {
+      fetchDocumentsData();
+    }, searchTerm ? 300 : 0);
 
-  // 3. COLOR PALETTE MAP FOR BADGES
+    return () => clearTimeout(delayDebounceFn);
+  }, [currentPage, statusFilter, searchTerm]); // Re-runs on page, filter, or search mutation loops
+
+  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE) || 1;
+
+  const handleFilterChange = (e) => {
+    setStatusFilter(e.target.value);
+    setCurrentPage(1); // Reset back to page 1 on active filter adjustments
+  };
+
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+    setCurrentPage(1); // Reset back to page 1 on search string adjustments
+  };
+
+  // 3. BADGE STYLE MAPS
   const getBadgeStyles = (status, type) => {
     if (type === 'STATUS') {
       const badges = {
@@ -59,28 +91,13 @@ export default function AllDocuments() {
     }
   };
 
-  // 🔥 NEW: Color-coded styling utility for the global text quality accuracy column
   const getAccuracyBadgeStyles = (score) => {
-    if (score >= 90) return 'bg-emerald-50 text-emerald-700 border-emerald-200'; // High Quality
-    if (score >= 70) return 'bg-amber-50 text-amber-700 border-amber-200';     // Medium Quality Warning
-    return 'bg-rose-50 text-rose-700 border-rose-200';                        // Low Quality Alarm
+    if (score >= 90) return 'bg-emerald-50 text-emerald-700 border-emerald-200'; 
+    if (score >= 70) return 'bg-amber-50 text-amber-700 border-amber-200';     
+    return 'bg-rose-50 text-rose-700 border-rose-200';                        
   };
 
-  // 4. FILTERING COMPUTATION
-  const filteredDocuments = documents.filter((doc) => {
-    const usernameStr = doc.username || doc.user?.username || doc.user_username || '';
-    
-    const matchesSearch = 
-      usernameStr.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (doc.document_type || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(doc.id).includes(searchTerm);
-
-    const matchesStatus = statusFilter === 'ALL' || doc.status === statusFilter || doc.ocr_status === statusFilter;
-
-    return matchesSearch && matchesStatus;
-  });
-
-  if (loading) {
+  if (loading && documents.length === 0) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col">
         <AdminNavbar email={adminEmail} />
@@ -97,7 +114,6 @@ export default function AllDocuments() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         
-        {/* HEADER SECTION */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">All Documents</h1>
           <p className="text-sm text-gray-500 mt-1">Monitor document uploads, track processing status, and manage actions.</p>
@@ -114,9 +130,9 @@ export default function AllDocuments() {
           <div className="w-full sm:max-w-md relative">
             <input
               type="text"
-              placeholder="Search by username or document type..."
+              placeholder="Search username or document type..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={handleSearchChange}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-slate-800 placeholder-gray-400"
             />
           </div>
@@ -125,7 +141,7 @@ export default function AllDocuments() {
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Filter Status:</label>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={handleFilterChange}
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-slate-800"
             >
               <option value="ALL">All Documents</option>
@@ -138,7 +154,11 @@ export default function AllDocuments() {
         </div>
 
         {/* RESULTS DATA TABLE CONTAINER */}
-        <div className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden">
+        <div className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden relative">
+          {loading && (
+            <div className="absolute top-0 left-0 right-0 h-1 bg-slate-800 animate-pulse" />
+          )}
+          
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-100 text-left">
               <thead className="bg-slate-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -146,7 +166,6 @@ export default function AllDocuments() {
                   <th className="px-6 py-4">Username</th>
                   <th className="px-6 py-4">Document Type</th>
                   <th className="px-6 py-4">OCR Status</th>
-                  {/* 🔥 NEW THEAD TH: Accuracy Column Title Header */}
                   <th className="px-6 py-4">OCR Accuracy</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4">Uploaded Date</th>
@@ -154,46 +173,32 @@ export default function AllDocuments() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm font-medium text-slate-700">
-                {filteredDocuments.map((doc) => (
+                {documents.map((doc) => (
                   <tr key={doc.id} className="hover:bg-slate-50/50 transition duration-75">
-                    
-                    {/* USERNAME */}
                     <td className="px-6 py-4 font-semibold text-slate-900">
                       {doc.username || doc.user?.username || doc.user_username || 'Unknown User'}
                     </td>
-                    
-                    {/* DOCUMENT TYPE */}
                     <td className="px-6 py-4 uppercase tracking-wider text-xs font-bold text-slate-600">
                       {(doc.document_type || 'Unclassified').replace(/_/g, ' ')}
                     </td>
-                    
-                    {/* OCR STATUS */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={getBadgeStyles(doc.ocr_status || 'PENDING', 'OCR')}>
                         {doc.ocr_status || 'PENDING'}
                       </span>
                     </td>
-
-                    {/* 🔥 NEW TD: Render dynamic accuracy evaluation tags */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold border ${getAccuracyBadgeStyles(doc.ocr_accuracy)}`}>
                         {doc.ocr_accuracy !== undefined && doc.ocr_accuracy !== null ? `${doc.ocr_accuracy}%` : '0.0%'}
                       </span>
                     </td>
-                    
-                    {/* STATUS */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={getBadgeStyles(doc.status, 'STATUS')}>
                         {doc.status}
                       </span>
                     </td>
-
-                    {/* UPLOADED DATE */}
                     <td className="px-6 py-4 text-gray-500 whitespace-nowrap">
                       {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : 'Recent'}
                     </td>
-                    
-                    {/* SIMPLIFIED VIEW ACTION */}
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <button
                         onClick={() => navigate(`/admin/documents/${doc.id}`)}
@@ -202,7 +207,6 @@ export default function AllDocuments() {
                         View
                       </button>
                     </td>
-
                   </tr>
                 ))}
               </tbody>
@@ -210,13 +214,58 @@ export default function AllDocuments() {
           </div>
 
           {/* EMPTY STATE */}
-          {filteredDocuments.length === 0 && (
+          {documents.length === 0 && (
             <div className="p-16 text-center text-gray-400 text-sm">
-              No documents matched the selected criteria.
+              No matching records found.
+            </div>
+          )}
+
+          {/* 🔥 SMART PAGINATION CONTROLLER: Only displays if total filtered results exceed 10 records */}
+          {totalCount > ITEMS_PER_PAGE && (
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+              <span className="text-xs font-semibold text-gray-400">
+                Showing page <span className="text-slate-700 font-bold">{currentPage}</span> of <span className="text-slate-700 font-bold">{totalPages}</span> ({totalCount} entries matched)
+              </span>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  disabled={!hasPrevious}
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  className="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-lg shadow-sm transition hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed select-none cursor-pointer"
+                >
+                  ← Previous
+                </button>
+                
+                <div className="hidden md:flex items-center space-x-1">
+                  {[...Array(totalPages)].map((_, index) => {
+                    const pageNum = index + 1;
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`w-8 h-8 rounded-lg text-xs font-bold transition flex items-center justify-center border cursor-pointer ${
+                          currentPage === pageNum
+                            ? 'bg-slate-800 text-white border-transparent'
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  disabled={!hasNext}
+                  onClick={() => setCurrentPage(prev => prev + 1)}
+                  className="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-lg shadow-sm transition hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed select-none cursor-pointer"
+                >
+                  Next →
+                </button>
+              </div>
             </div>
           )}
         </div>
-
       </main>
     </div>
   );

@@ -21,7 +21,7 @@ export default function MyDocument() {
         setError('');
         
         const response = await axiosInstance.get('documents/list/');
-        setDocuments(response.data);
+        setDocuments(response.data.results || response.data || []);
       } catch (err) {
         console.error("Failed fetching comprehensive document archive:", err);
         setError(err.response?.data?.detail || 'Could not connect to document repository.');
