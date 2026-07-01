@@ -74,6 +74,10 @@ class Document(models.Model):
         help_text="The calculated mean confidence level percentage of the parsed text."
     )
 
+    razorpay_order_id = models.CharField(max_length=100, null=True, blank=True)
+    razorpay_payment_id = models.CharField(max_length=100, null=True, blank=True)
+    payment_verified = models.BooleanField(default=False)
+
     class Meta:
         ordering = ['-uploaded_at']
         verbose_name = "Document Upload"

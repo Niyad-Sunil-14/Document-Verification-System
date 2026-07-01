@@ -4,10 +4,13 @@ from .models import Document,Notification
 class DocumentUploadSerializer(serializers.ModelSerializer):
     file = serializers.FileField(write_only=True)
     username = serializers.ReadOnlyField(source='user.fullname')
+    razorpay_order_id = serializers.CharField(required=True)
+    razorpay_payment_id = serializers.CharField(required=True)
+    razorpay_signature = serializers.CharField(required=True)
 
     class Meta:
         model = Document
-        fields = ['id', 'username', 'document_type', 'file', 'status', 'ocr_status', 'uploaded_at']
+        fields = ['id', 'username', 'document_type', 'file', 'status', 'ocr_status', 'uploaded_at','razorpay_order_id','razorpay_payment_id','razorpay_signature']
 
 
 class DocumentListSerializer(serializers.ModelSerializer):

@@ -9,10 +9,13 @@ export default function Upload() {
   // 1. STATE MANAGEMENT
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
-  const [isPdf, setIsPdf] = useState(false); // New state flag to track file extension type
+  const [isPdf, setIsPdf] = useState(false); 
   const [documentType, setDocumentType] = useState('INVOICE');
   const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState({ text: '', isError: false });
+  
+  // 🔥 NEW STATE: Tracks specific sub-stages of checkout vs file transmission
+  const [paymentStage, setPaymentStage] = useState('IDLE'); // IDLE, INITIATED, SUCCESS
 
   // 2. DETECT FILE TYPE & MANAGE PREVIEW BLOB
   useEffect(() => {
@@ -22,16 +25,14 @@ export default function Upload() {
       return;
     }
 
-    // Check if the uploaded file is a PDF
     if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
       setIsPdf(true);
-      setPreviewUrl(null); // Clear out graphic image preview URLs
+      setPreviewUrl(null); 
     } else {
       setIsPdf(false);
       const objectUrl = URL.createObjectURL(file);
       setPreviewUrl(objectUrl);
 
-      // Clean up graphic memory allocation hooks
       return () => URL.revokeObjectURL(objectUrl);
     }
   }, [file]);
@@ -40,11 +41,12 @@ export default function Upload() {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
       setMessage({ text: '', isError: false });
+      setPaymentStage('IDLE');
     }
   };
 
-  // 3. MULTI-PART API SUBMISSION SUBMIT HANDLER
-  const handleSubmit = async (e) => {
+  // 3. INTERCEPTED PAYMENT & FILE TRANSMISSION WORKFLOW
+  const handlePaymentAndUpload = async (e) => {
     e.preventDefault();
 
     if (!file) {
@@ -52,35 +54,91 @@ export default function Upload() {
       return;
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('document_type', documentType);
-
     try {
       setIsUploading(true);
       setMessage({ text: '', isError: false });
+      setPaymentStage('INITIATED');
 
-      await axiosInstance.post('documents/upload/', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      // Step A: Contact backend payment module to create the Razorpay Order
+      const orderResponse = await axiosInstance.post('documents/payments/razorpay-order/', {
+        document_type: documentType,
       });
 
-      setMessage({ text: 'Document uploaded successfully!', isError: false });
-      setFile(null); 
+      const { order_id, amount, currency, razorpay_key_id, user_details } = orderResponse.data;
 
-      setTimeout(() => {
-        navigate('/user-dashboard'); 
-      }, 2000);
+      // Step B: Formulate Razorpay checkout options mapping signatures
+      const options = {
+        key: razorpay_key_id,
+        amount: amount,
+        currency: currency,
+        name: 'DocVerify Platform Hub',
+        description: `${documentType.replace(/_/g, ' ')} Processing Fee`,
+        order_id: order_id,
+        
+        // Fired automatically when checkout completes inside the popup frame window
+        handler: async function (paymentInfo) {
+          try {
+            setPaymentStage('SUCCESS');
+            
+            // Step C: Compile the combined Multipart file dataset + payment credentials
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('document_type', documentType);
+            formData.append('razorpay_payment_id', paymentInfo.razorpay_payment_id);
+            formData.append('razorpay_order_id', paymentInfo.razorpay_order_id);
+            formData.append('razorpay_signature', paymentInfo.razorpay_signature);
+
+            // Transmit file data straight to document architecture backend endpoints
+            await axiosInstance.post('documents/upload/', formData, {
+              headers: {
+                'Content-Type': 'multipart/form-data',
+              },
+            });
+
+            setMessage({ text: '🎉 Payment authorized and document uploaded successfully!', isError: false });
+            setFile(null); 
+
+            setTimeout(() => {
+              navigate('/user-dashboard'); 
+            }, 2000);
+
+          } catch (uploadErr) {
+            console.error("File upload sequence crash after payment confirmation:", uploadErr);
+            setMessage({ 
+              text: uploadErr.response?.data?.detail || 'Payment was captured, but server storage verification registration timed out.', 
+              isError: true 
+            });
+            setIsUploading(false);
+          }
+        },
+        prefill: {
+          name: user_details?.fullname || '',
+          email: user_details?.email || '',
+        },
+        theme: {
+          color: '#4f46e5', // Brand matching violet indigo palette tone specifications
+        },
+        modal: {
+          ondismiss: function () {
+            setIsUploading(false);
+            setPaymentStage('IDLE');
+            setMessage({ text: '❌ Payment window exited. Document creation suspended.', isError: true });
+          }
+        }
+      };
+
+      // Step D: Open up the interactive popup payment screen module window 
+      const rzpWindow = new window.Razorpay(options);
+      rzpWindow.open();
 
     } catch (err) {
-      console.error("File ingestion pipeline fault:", err);
+      console.error("File ingestion pipeline clearing rails error:", err);
       setMessage({ 
-        text: err.response?.data?.detail || 'File compilation failed. Please verify document formatting metrics.', 
+        text: err.response?.data?.detail || 'Failed to initialize payment infrastructure order parameters.', 
         isError: true 
       });
-    } finally {
       setIsUploading(false);
+      setPaymentStage('IDLE');
     }
   };
 
@@ -106,7 +164,7 @@ export default function Upload() {
 
         {/* CORE FORM MODULE */}
         <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 sm:p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handlePaymentAndUpload} className="space-y-6">
             
             {/* CLASSIFICATION CONFIG */}
             <div>
@@ -117,22 +175,23 @@ export default function Upload() {
                 id="docType"
                 value={documentType}
                 onChange={(e) => setDocumentType(e.target.value)}
+                disabled={isUploading}
                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition text-slate-800 shadow-sm"
               >
-                <option value="PASSPORT">🛂 Personal Passport Scan</option>
-                <option value="DRIVERS LICENSE">🚗 Driver's License</option>
-                <option value="ID CARD">🪪 Government Issued ID Card</option>
-                <option value="INVOICE">🧾 Commercial Invoice</option>
-                <option value="RECEIPT">🛒 Retail Sales Receipt</option>
-                <option value="PAYSLIP">💵 Payroll Earnings Statement</option>
-                <option value="BANK STATEMENT">🏦 Official Bank Statement</option>
-                <option value="UTILITY BILL">⚡ Utility Proof of Address</option>
-                <option value="CONTRACT">📜 Signed Business Contract</option>
-                <option value="TAX FORM">📊 Corporate Tax Filing Docs</option>
+                <option value="PASSPORT"> Pasport Scan</option>
+                <option value="DRIVERS LICENSE"> Drivers License</option>
+                <option value="ID CARD"> Government Issued ID Card</option>
+                <option value="INVOICE"> Commercial Invoice</option>
+                <option value="RECEIPT"> Retail Sales Receipt</option>
+                <option value="PAYSLIP"> Payroll Earnings Statement</option>
+                <option value="BANK STATEMENT"> Official Bank Statement</option>
+                <option value="UTILITY BILL"> Utility Proof of Address</option>
+                <option value="CONTRACT"> Signed Business Contract</option>
+                <option value="TAX FORM"> Corporate Tax Filing Docs</option>
               </select>
             </div>
 
-            {/* DROPZONE SELECTION CONTAINER WITH DYNAMIC IMAGE/PDF HANDLING */}
+            {/* DROPZONE SELECTION CONTAINER */}
             <div>
               <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-2">
                 File Binary Attachment
@@ -145,13 +204,11 @@ export default function Upload() {
                     
                     {/* DYNAMIC CONDITIONAL PREVIEW PORTAL */}
                     {isPdf ? (
-                      /* If the file is a PDF, show a sleek document icon preview card instead of a broken graphic img */
                       <div className="w-32 h-40 bg-rose-50 border border-rose-200 rounded-xl shadow-md flex flex-col items-center justify-center p-4">
                         <span className="text-4xl">📕</span>
                         <span className="text-[10px] font-black text-rose-600 tracking-wider uppercase mt-2 bg-rose-100 px-2 py-0.5 rounded">PDF DOCUMENT</span>
                       </div>
                     ) : (
-                      /* If it's an image, render the thumbnail preview element standardly */
                       <div className="relative group max-w-xs rounded-xl overflow-hidden shadow-md border border-slate-200 bg-white p-1.5">
                         <img 
                           src={previewUrl} 
@@ -169,7 +226,8 @@ export default function Upload() {
                     <button 
                       type="button" 
                       onClick={() => setFile(null)}
-                      className="text-xs font-bold text-rose-500 hover:text-rose-700 underline transition cursor-pointer"
+                      disabled={isUploading}
+                      className="text-xs font-bold text-rose-500 hover:text-rose-700 underline transition cursor-pointer disabled:opacity-40"
                     >
                       Remove and swap file
                     </button>
@@ -186,7 +244,6 @@ export default function Upload() {
                   </>
                 )}
 
-                {/* 🔥 CHANGED: Adjusted input "accept" parameter to include PDFs alongside standard images */}
                 <input 
                   type="file" 
                   accept="image/*,application/pdf"
@@ -197,7 +254,7 @@ export default function Upload() {
               </div>
             </div>
 
-            {/* CENTERED NOTIFICATION MESSAGING CONTAINER */}
+            {/* NOTIFICATION MESSAGING CONTAINER */}
             {message.text && (
               <div className="flex justify-center items-center pt-2">
                 <div className={`w-full max-w-md p-4 rounded-xl border text-sm font-bold text-center shadow-sm flex items-center justify-center space-x-2 ${
@@ -215,14 +272,18 @@ export default function Upload() {
               <button
                 type="submit"
                 disabled={isUploading}
-                className="w-full py-4 px-6 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white font-bold text-base rounded-xl shadow-md shadow-violet-200/50 transition-all active:scale-[0.99] disabled:scale-100 flex items-center justify-center space-x-2 cursor-pointer"
+                className="w-full py-4 px-6 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white font-bold text-base rounded-xl shadow-md shadow-violet-200/50 transition-all active:scale-[0.99] disabled:scale-100 flex items-center justify-center space-x-2 cursor-pointer uppercase tracking-wider text-sm"
               >
                 {isUploading ? (
-                  <>
+                  <div className="flex items-center space-x-2">
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
-                  </>
+                    <span>
+                      {paymentStage === 'INITIATED' && 'Contacting Payment Gateway...'}
+                      {paymentStage === 'SUCCESS' && 'Verifying & Saving Document Records...'}
+                    </span>
+                  </div>
                 ) : (
-                  <span>Upload</span>
+                  <span>Verify and Process Checkout</span>
                 )}
               </button>
             </div>

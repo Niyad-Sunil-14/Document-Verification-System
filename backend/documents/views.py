@@ -2,6 +2,9 @@ import logging
 import tempfile  
 import cloudinary 
 import environ    
+import hmac
+import hashlib
+import json
 
 from django.db import transaction
 from rest_framework import status
@@ -9,7 +12,6 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.generics import RetrieveAPIView
 import cloudinary.uploader
 import pytesseract
 from pytesseract import Output
@@ -17,6 +19,11 @@ from pdf2image import convert_from_path
 import cv2
 import numpy as np
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import AllowAny
+from django.conf import settings
+import razorpay
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 
 import os
 from .models import Document,Notification
@@ -43,6 +50,37 @@ class DocumentUploadView(APIView):
         serializer = DocumentUploadSerializer(data=request.data)
         
         if serializer.is_valid():
+            # =================================================================
+            # 🔥 STEP A: INTERCEPT & SECURELY VERIFY RAZORPAY BILLING TOKENS
+            # =================================================================
+            rzp_order_id = serializer.validated_data.get('razorpay_order_id')
+            rzp_payment_id = serializer.validated_data.get('razorpay_payment_id')
+            rzp_signature = serializer.validated_data.get('razorpay_signature')
+            
+            try:
+                # Initialize Razorpay SDK client using your verified settings keys
+                client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+                
+                verification_payload = {
+                    'razorpay_order_id': rzp_order_id,
+                    'razorpay_payment_id': rzp_payment_id,
+                    'razorpay_signature': rzp_signature
+                }
+                
+                # Cryptographically verifies signature matching. Crashes to exception if tampered with.
+                client.utility.verify_payment_signature(verification_payload)
+                logger.info(f"🛡️ Razorpay Payment verified for Order ID: {rzp_order_id}")
+                
+            except Exception as pay_err:
+                logger.error(f"🚨 Payment Signature Integrity Check Failed: {pay_err}")
+                return Response(
+                    {"detail": "Payment security validation signature mismatch. Processing terminated."}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # =================================================================
+            # STEP B: CORE OCR PIPELINE MANAGEMENT (Your Original Logic)
+            # =================================================================
             uploaded_file = request.FILES['file']
             document_type = serializer.validated_data.get('document_type', '')
             original_filename = uploaded_file.name
@@ -107,6 +145,9 @@ class DocumentUploadView(APIView):
 
             uploaded_file.seek(0)
 
+            # =================================================================
+            # STEP C: STORAGE ROUTING & MODEL RECORD ENTRIES
+            # =================================================================
             try:
                 cloudinary.config(
                     cloud_name=env('CLOUDINARY_CLOUD_NAME'),
@@ -128,6 +169,8 @@ class DocumentUploadView(APIView):
                 secure_url = upload_result.get("secure_url")
                 
                 with transaction.atomic():
+                    # 🔥 FIX: Since we are inside the verified payment block, 
+                    # we explicitly save the tracking parameters right here!
                     document = Document.objects.create(
                         user=request.user,
                         document_type=document_type,
@@ -136,8 +179,15 @@ class DocumentUploadView(APIView):
                         status="PENDING",
                         ocr_status=ocr_pipeline_status,
                         ocr_accuracy=ocr_accuracy_score,
-                        extracted_text=text.strip() if text else ""
+                        extracted_text=text.strip() if text else "",
+                        
+                        # Add your field mappings right here during instance initialization
+                        razorpay_order_id=rzp_order_id,
+                        razorpay_payment_id=rzp_payment_id,
+                        payment_verified=True # 🔥 Mark it verified immediately!
                     )
+
+                logger.info(f"🎉 File {original_filename} successfully saved and marked as PAID in database.")
 
                 return Response(
                     {
@@ -145,10 +195,8 @@ class DocumentUploadView(APIView):
                         "document_type": document.document_type,
                         "file": document.file, 
                         "filename": original_filename,
-                        "extracted_text": document.extracted_text, 
                         "status": document.status,
-                        "ocr_status": document.ocr_status,
-                        "ocr_accuracy": document.ocr_accuracy
+                        "payment_verified": True # Return success metric to React dashboard
                     },
                     status=status.HTTP_201_CREATED
                 )
@@ -403,3 +451,116 @@ class AdminDashboardMetricsView(APIView):
 
 
 
+
+#RazorPay
+import logging
+import json
+import razorpay
+from django.conf import settings
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+
+logger = logging.getLogger(__name__)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class RazorpayWebhookView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request, *args, **kwargs):
+        # 1. Capture the absolute RAW body bytes and signature header
+        # Do NOT use request.data here, as DRF parses it into a dict, breaking hashes!
+        webhook_body = request.body
+        received_signature = request.headers.get('X-Razorpay-Signature', '')
+        webhook_secret = getattr(settings, 'RAZORPAY_WEBHOOK_SECRET', '')
+
+        # 2. Use the official SDK Webhook verification helper method
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        
+        try:
+            # This explicitly validates webhook payloads using raw string formats
+            client.utility.verify_webhook_signature(
+                webhook_body.decode('utf-8'), 
+                received_signature, 
+                webhook_secret
+            )
+            logger.info("🛡️ Webhook cryptographic signature matches perfectly!")
+            
+        except Exception as sig_err:
+            logger.error(f"🚨 Razorpay webhook signature mismatch: {sig_err}")
+            # We still return a 400 here during setup because the keys are out of sync
+            return Response({"detail": "Signature integrity verification failed."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 3. If validation passes, read the event data safely
+        try:
+            event_data = json.loads(webhook_body.decode('utf-8'))
+            event_type = event_data.get('event')
+            payload = event_data.get('payload', {})
+            
+            logger.info(f"📦 Intercepted Razorpay Event: {event_type}")
+
+            # Handle your database triggers safely
+            if event_type in ["order.paid", "payment.captured"]:
+                payment_entity = payload.get('payment', {}).get('entity', {})
+                razorpay_order_id = payment_entity.get('order_id')
+                razorpay_payment_id = payment_entity.get('id')
+                
+                print(f"💰 Confirmed payment capture for Order: {razorpay_order_id}")
+                # Optional: Your DB status updates here...
+
+            # Always return 200 for validly signed payloads to silence retries
+            return Response({"status": "acknowledged"}, status=status.HTTP_200_OK)
+
+        except Exception as parse_err:
+            logger.error(f"❌ Error handling payload parameters: {parse_err}")
+            return Response({"detail": "Internal processing failure."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class RazorpayOrderCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        # 1. Initialize the Razorpay Client with your dashboard credentials
+        # (Make sure RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are set in settings.py)
+        client = razorpay.Client(
+            auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET)
+        )
+
+        # 2. Define your amount parameters (Razorpay expects amounts in PAISA)
+        # ₹150.00 = 150 * 100 paise = 15000 paise
+        amount_in_rupees = 150
+        amount_in_paisa = amount_in_rupees * 100 
+        currency = "INR"
+
+        # 3. Create the order payload tracking data references
+        order_data = {
+            "amount": amount_in_paisa,
+            "currency": currency,
+            "payment_capture": 1 # 1 means automatically capture payment immediately on success
+        }
+
+        try:
+            # 4. Generate the official order reference via Razorpay API core
+            razorpay_order = client.order.create(data=order_data)
+            
+            # 5. Compile everything your React form needs to launch the checkout modal
+            return Response({
+                "order_id": razorpay_order["id"],
+                "amount": amount_in_paisa,
+                "currency": currency,
+                "razorpay_key_id": settings.RAZORPAY_KEY_ID,
+                "user_details": {
+                    "fullname": getattr(request.user, "fullname", ""),
+                    "email": request.user.email
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {"detail": f"Failed to open clearing instance with Razorpay: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
