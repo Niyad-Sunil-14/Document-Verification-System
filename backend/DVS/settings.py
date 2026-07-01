@@ -14,7 +14,6 @@ import os
 from pathlib import Path
 from datetime import timedelta
 import cloudinary
-import cloudinary.uploader
 import environ
 
 env = environ.Env(
