@@ -60,7 +60,7 @@ export default function Upload() {
       setPaymentStage('INITIATED');
 
       // Step A: Contact backend payment module to create the Razorpay Order
-      const orderResponse = await axiosInstance.post('documents/payments/razorpay-order/', {
+      const orderResponse = await axiosInstance.post('documents/payments/create-order/', {
         document_type: documentType,
       });
 
@@ -71,7 +71,7 @@ export default function Upload() {
         key: razorpay_key_id,
         amount: amount,
         currency: currency,
-        name: 'DocVerify Platform Hub',
+        name: 'DocVerify System',
         description: `${documentType.replace(/_/g, ' ')} Processing Fee`,
         order_id: order_id,
         

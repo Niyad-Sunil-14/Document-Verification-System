@@ -43,6 +43,11 @@ class CustomUser(AbstractUser):
     fullname = models.CharField(max_length=100)
     profile_picture = models.URLField(blank=True, null=True, default="")
 
+    #Subscription fields
+    is_subscribed = models.BooleanField(default=False)
+    document_credits = models.IntegerField(default=0)  
+    subscription_expires_at = models.DateTimeField(blank=True, null=True)
+
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["fullname"]
 

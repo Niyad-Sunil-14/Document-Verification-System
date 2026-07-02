@@ -10,7 +10,9 @@ urlpatterns = [
 
     #RazorPay
     path('payments/razorpay-webhook/', RazorpayWebhookView.as_view(), name='razorpay-webhook'),
-    path('payments/razorpay-order/', RazorpayOrderCreateView.as_view(), name='razorpay-order'),
+    path('payments/create-order/', RazorpayOrderCreateView.as_view(), name='create-order'),
+    path('payments/create-subscription/', CreateSubscriptionView.as_view(), name='create-subscription'),
+    path('payments/verify-subscription/', VerifySubscriptionView.as_view(), name='verify-subscription'),
 
 
     # ADMIN SIDE

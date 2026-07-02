@@ -2,8 +2,6 @@ import logging
 import tempfile  
 import cloudinary 
 import environ    
-import hmac
-import hashlib
 import json
 
 from django.db import transaction
@@ -24,6 +22,8 @@ from django.conf import settings
 import razorpay
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+from django.utils import timezone
+from datetime import timedelta
 
 import os
 from .models import Document,Notification
@@ -47,6 +47,16 @@ class DocumentUploadView(APIView):
     parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request, *args, **kwargs):
+        user = request.user
+        
+        # 🔥 A: Credit & Subscription Guard Layer
+        if not user.is_subscribed and user.document_credits <= 0:
+            # If they aren't premium and have no free trials left, throw an action lock
+            return Response(
+                {"detail": "Out of verification credits. Please upgrade your plan or pay per single verification loop."},
+                status=status.HTTP_402_PAYMENT_REQUIRED
+            )
+
         serializer = DocumentUploadSerializer(data=request.data)
         
         if serializer.is_valid():
@@ -186,6 +196,10 @@ class DocumentUploadView(APIView):
                         razorpay_payment_id=rzp_payment_id,
                         payment_verified=True # 🔥 Mark it verified immediately!
                     )
+
+                    if not serializer.validated_data.get('razorpay_payment_id'):
+                        user.document_credits -= 1
+                        user.save()
 
                 logger.info(f"🎉 File {original_filename} successfully saved and marked as PAID in database.")
 
@@ -453,18 +467,6 @@ class AdminDashboardMetricsView(APIView):
 
 
 #RazorPay
-import logging
-import json
-import razorpay
-from django.conf import settings
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import AllowAny
-
-logger = logging.getLogger(__name__)
 
 @method_decorator(csrf_exempt, name='dispatch')
 class RazorpayWebhookView(APIView):
@@ -518,36 +520,27 @@ class RazorpayWebhookView(APIView):
         except Exception as parse_err:
             logger.error(f"❌ Error handling payload parameters: {parse_err}")
             return Response({"detail": "Internal processing failure."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
+
 
 class RazorpayOrderCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        # 1. Initialize the Razorpay Client with your dashboard credentials
-        # (Make sure RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are set in settings.py)
-        client = razorpay.Client(
-            auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET)
-        )
-
-        # 2. Define your amount parameters (Razorpay expects amounts in PAISA)
-        # ₹150.00 = 150 * 100 paise = 15000 paise
-        amount_in_rupees = 150
+        # 🚀 MODIFIED: Changed amount to ₹49 to sync with your dynamic Pay-As-You-Verify tier
+        amount_in_rupees = 49
         amount_in_paisa = amount_in_rupees * 100 
         currency = "INR"
 
-        # 3. Create the order payload tracking data references
         order_data = {
             "amount": amount_in_paisa,
             "currency": currency,
-            "payment_capture": 1 # 1 means automatically capture payment immediately on success
+            "payment_capture": 1
         }
 
         try:
-            # 4. Generate the official order reference via Razorpay API core
-            razorpay_order = client.order.create(data=order_data)
-            
-            # 5. Compile everything your React form needs to launch the checkout modal
+            # Use the global razorpay_client initialized at the top
+            razorpay_order = razorpay_client.order.create(data=order_data)
             return Response({
                 "order_id": razorpay_order["id"],
                 "amount": amount_in_paisa,
@@ -558,9 +551,105 @@ class RazorpayOrderCreateView(APIView):
                     "email": request.user.email
                 }
             }, status=status.HTTP_200_OK)
-
         except Exception as e:
             return Response(
                 {"detail": f"Failed to open clearing instance with Razorpay: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+
+
+# Initialize Razorpay Client
+razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+
+class CreateSubscriptionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        try:
+            user = request.user
+            
+            # 🚀 FIXED: We use a robust, globally available one-time order generation 
+            # pipeline instead of Razorpay's restrictive plan schema structure.
+            amount_in_paisa = 299 * 100  # ₹299 = 29900 Paise
+            currency = "INR"
+
+            order_data = {
+                "amount": amount_in_paisa,
+                "currency": currency,
+                "payment_capture": 1,
+                "notes": {
+                    "user_id": str(user.id),
+                    "fullname": user.fullname,
+                    "plan_type": "monthly_premium"
+                }
+            }
+
+            # Generate order context natively without crashing
+            razorpay_order = razorpay_client.order.create(data=order_data)
+
+            return Response({
+                "order_id": razorpay_order['id'],  # Passes back standard order reference cleanly
+                "amount": amount_in_paisa,
+                "currency": currency,
+                "key_id": settings.RAZORPAY_KEY_ID,
+                "user_details": {
+                    "fullname": user.fullname,
+                    "email": user.email
+                }
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            logger.error(f"Subscription creation error: {str(e)}")
+            return Response(
+                {"detail": f"An unexpected error blocked transaction initiation: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+
+
+class VerifySubscriptionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        try:
+            razorpay_order_id = request.data.get('razorpay_order_id') 
+            razorpay_payment_id = request.data.get('razorpay_payment_id')
+            razorpay_signature = request.data.get('razorpay_signature')
+
+            verification_payload = {
+                'razorpay_order_id': razorpay_order_id,
+                'razorpay_payment_id': razorpay_payment_id,
+                'razorpay_signature': razorpay_signature
+            }
+
+            try:
+                razorpay_client.utility.verify_payment_signature(verification_payload)
+            except razorpay.errors.SignatureVerificationError:
+                return Response({"detail": "Cryptographic signature validation check failed."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # --- 🔥 SUCCESS: UPDATE USER PROFILE HERE ---
+            user = request.user
+            user.is_subscribed = True
+            user.document_credits += 12  # Give them their 12 free uploads
+            
+            # 🔥 Dynamic Expiry Extension Logic
+            if user.subscription_expires_at and user.subscription_expires_at > timezone.now():
+                # If their current subscription is still active, add 30 days onto the existing expiry date
+                user.subscription_expires_at = user.subscription_expires_at + timedelta(days=30)
+            else:
+                # If they don't have an active subscription or it expired already, start 30 days from right now
+                user.subscription_expires_at = timezone.now() + timedelta(days=30)
+            user.save()
+            
+
+            # Create a notification for them
+            Notification.objects.create(
+                user=user,
+                title="💳 Subscription Activated",
+                description="Your Monthly Premium Pass is live! 12 document upload credits added."
+            )
+
+            return Response({"status": "Subscription confirmed successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)

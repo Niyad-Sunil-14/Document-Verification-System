@@ -17,6 +17,8 @@ import RegisterOTP from './components/auth/RegisterOTP';
 import AllDocuments from './components/pages/admin/AllDocuments';
 import AdminDocumentDetails from './components/pages/admin/AdminDocumentDetails';
 import Notification from './components/pages/user/Notification';
+import Pricing from './components/pages/user/Pricing';
+import PaymentHistory from './components/pages/user/PaymentHistory';
 
 function App() {
   return (
@@ -92,6 +94,20 @@ function App() {
           <Route path="/notifications" element={
             <ProtectedRoute allowedRoles={['USER']}>
                 <Notification/>
+              </ProtectedRoute>
+            }            
+          />
+
+          <Route path="/pricing" element={
+            <ProtectedRoute allowedRoles={['USER']}>
+                <Pricing/>
+              </ProtectedRoute>
+            }            
+          />
+
+          <Route path="/payment-history" element={
+            <ProtectedRoute allowedRoles={['USER']}>
+                <PaymentHistory/>
               </ProtectedRoute>
             }            
           />

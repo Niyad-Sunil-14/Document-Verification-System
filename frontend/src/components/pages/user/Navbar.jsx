@@ -10,7 +10,7 @@ export default function Navbar() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // 🔥 NEW: State for real notifications array data hook
+  // State for notifications
   const [notifications, setNotifications] = useState([]);
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -33,7 +33,7 @@ export default function Navbar() {
         const profileResponse = await axiosInstance.get('users/profile/'); 
         setUser(profileResponse.data);
 
-        // 🔥 Fetch live notifications from database limit payload to top 3 for preview panel
+        // Fetch live notifications from database limit payload to top 3
         const alertResponse = await axiosInstance.get('documents/notifications/');
         setNotifications(alertResponse.data.slice(0, 3));
       } catch (err) {
@@ -47,7 +47,6 @@ export default function Navbar() {
     fetchUserProfileAndAlerts();
   }, []);
 
-  // 🔥 Has unread notification tracking compute logic
   const hasUnread = notifications.some(n => !n.is_read);
 
   const logoutUser = async () => {
@@ -79,6 +78,8 @@ export default function Navbar() {
               <Link to="/user-dashboard" className={getNavLinkClass('/user-dashboard')}>Dashboard</Link>
               <Link to="/documents" className={getNavLinkClass('/documents')}>My Documents</Link>
               <Link to="/upload" className={getNavLinkClass('/upload')}>Upload Document</Link>
+              {/* 🔥 Added Pricing Link to Navigation Layout */}
+              <Link to="/pricing" className={getNavLinkClass('/pricing')}>Pricing</Link>
               <Link to="/support" className={getNavLinkClass('/support')}>Help & Support</Link>
             </div>
           </div>
@@ -88,14 +89,16 @@ export default function Navbar() {
             {/* NOTIFICATION ITEM */}
             <div className="relative">
               <button 
-                onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+                onClick={() => {
+                  setIsNotificationOpen(!isNotificationOpen);
+                  setIsProfileOpen(false);
+                }}
                 className="p-1.5 text-gray-400 hover:text-gray-500 rounded-full hover:bg-slate-50 transition relative focus:outline-none cursor-pointer"
               >
                 <span className="sr-only">Notification</span>
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
-                {/* 🔥 DYNAMIC BADGE RED DOT CONDITION MATCHING */}
                 {hasUnread && (
                   <span className="absolute top-1.5 right-1.5 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
                 )}
@@ -108,7 +111,6 @@ export default function Navbar() {
                     Notifications Log
                   </div>
                   
-                  {/* 🔥 DYNAMIC INLINE ITERATION OF PREVIEW CORES */}
                   <div className="divide-y divide-slate-50 max-h-60 overflow-y-auto">
                     {notifications.map((notif) => (
                       <div key={notif.id} className="px-4 py-3 text-sm hover:bg-slate-50 cursor-pointer">
@@ -127,7 +129,6 @@ export default function Navbar() {
                     )}
                   </div>
 
-                  {/* 🔥 LINK REDIRECT OUT ROW TO DEDICATED MASTER LOG */}
                   <Link 
                     to="/notifications" 
                     onClick={() => setIsNotificationOpen(false)}
@@ -142,7 +143,10 @@ export default function Navbar() {
             {/* PROFILE DROPDOWN ITEM */}
             <div className="relative">
               <button 
-                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                onClick={() => {
+                  setIsProfileOpen(!isProfileOpen);
+                  setIsNotificationOpen(false);
+                }}
                 className="flex text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 items-center space-x-2 border border-slate-200 p-1.5 pr-3 hover:bg-slate-50 transition cursor-pointer"
               >
                 <div className="w-8 h-8 rounded-lg bg-violet-600 text-white flex items-center justify-center font-bold text-sm uppercase shadow-sm">
@@ -158,11 +162,37 @@ export default function Navbar() {
 
               {isProfileOpen && (
                 <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-xl shadow-lg bg-white ring-1 ring-black ring-opacity-5 border border-slate-100 py-1 z-50">
+                  {/* Account and Dynamic Status Section */}
                   <div className="px-4 py-2.5 text-xs border-b border-slate-100 bg-slate-50/50">
                     Active Account: <br /><strong className="text-slate-800 break-all">{user?.email}</strong>
+                    
+                    {/* Dynamic Credit Counter Gauge */}
+                    {user?.is_subscribed && (
+                      <div>
+                        <div className="mt-2 pt-2 border-t border-slate-100 flex justify-between items-center text-gray-400 font-medium">
+                          <span>Credits Left:</span>
+                          <span className="font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-md">
+                            {user?.document_credits ?? 0}
+                          </span>
+                        </div>
+
+                        <div className="mt-2 flex items-center justify-center space-x-1 w-full px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/60 shadow-sm">
+                          <span>👑</span>
+                          <span className="tracking-wide uppercase">PREMIUM PASS ACTIVE</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <Link to="/profile" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-semibold text-decoration-none">Profile</Link>
-                  <Link to="/settings" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium text-decoration-none">Account Settings</Link>
+
+                  {/* Standard Navigation Links Block */}
+                  <Link to="/profile" onClick={() => setIsProfileOpen(false)} className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium text-decoration-none">Profile</Link>
+                  
+                  <Link to="/payment-history" onClick={() => setIsProfileOpen(false)} className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium text-decoration-none flex items-center space-x-1">
+                    <span>Payment History</span>
+                  </Link>
+
+                  <Link to="/settings" onClick={() => setIsProfileOpen(false)} className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium text-decoration-none">Account Settings</Link>
+                  
                   <button onClick={logoutUser} className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 font-bold border-t border-slate-100 cursor-pointer">
                     Logout
                   </button>
@@ -187,15 +217,23 @@ export default function Navbar() {
         </div>
       </div>
 
+      {/* MOBILE BREAKPOINT NAVIGATION MENU */}
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white border-t border-slate-100 px-4 pt-2 pb-4 space-y-1 shadow-inner">
-          <Link to="/user-dashboard" className="block px-3 py-2 rounded-lg text-base font-bold bg-violet-50 text-violet-700 text-decoration-none">Dashboard</Link>
-          <Link to="/documents" className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">My Documents</Link>
-          <Link to="/upload" className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">Upload Document</Link>
-          {/* Mobile points straight to notifications center */}
-          <Link to="/notifications" className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">Notifications Center</Link>
-          <Link to="/profile" className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">Profile</Link>
-          <Link to="/support" className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">Help & Support</Link>
+          <Link to="/user-dashboard" onClick={() => setIsMobileMenuOpen(false)} className="block px-3 py-2 rounded-lg text-base font-bold bg-violet-50 text-violet-700 text-decoration-none">Dashboard</Link>
+          <Link to="/documents" onClick={() => setIsMobileMenuOpen(false)} className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">My Documents</Link>
+          <Link to="/upload" onClick={() => setIsMobileMenuOpen(false)} className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">Upload Document</Link>
+          
+          {/* 🔥 Added Pricing Link inside Mobile layout stack */}
+          <Link to="/pricing" onClick={() => setIsMobileMenuOpen(false)} className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">Pricing</Link>
+          
+          <Link to="/notifications" onClick={() => setIsMobileMenuOpen(false)} className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">Notifications Center</Link>
+          <Link to="/profile" onClick={() => setIsMobileMenuOpen(false)} className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">Profile</Link>
+          
+          {/* 🔥 Added Payment History link inside Mobile layout stack */}
+          <Link to="/payment-history" onClick={() => setIsMobileMenuOpen(false)} className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">Payment History</Link>
+          
+          <Link to="/support" onClick={() => setIsMobileMenuOpen(false)} className="block px-3 py-2 rounded-lg text-base font-medium text-gray-600 hover:bg-slate-50 text-decoration-none">Help & Support</Link>
           
           <div className="pt-4 border-t border-slate-200 mt-2">
             <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Logged Identity</p>
