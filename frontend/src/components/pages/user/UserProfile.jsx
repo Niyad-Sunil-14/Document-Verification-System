@@ -18,7 +18,7 @@ export default function UserProfile() {
   const [formData, setFormData] = useState({ fullname: '', email: '' });
   const [passwordData, setPasswordData] = useState({ old_password: '', new_password: '', confirm_password: '' });
   
-  // 🔥 NEW STATES: Multi-step verification workflow states
+  // Multi-step verification workflow states
   const [isOtpStep, setIsOtpStep] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [isUploadingPic, setIsUploadingPic] = useState(false);
@@ -34,7 +34,7 @@ export default function UserProfile() {
       try {
         setLoading(true);
         setError('');
-        const response = await axiosInstance.get('users/profile/'); 
+        const response = await axiosInstance.get('users/profile/');
         setUser(response.data);
         setFormData({
           fullname: response.data?.fullname || '',
@@ -60,7 +60,7 @@ export default function UserProfile() {
     setPasswordData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // 🔥 NEW ACTION: Profile Picture Upload handler routing directly to multipart streams
+  // Profile Picture Upload handler routing directly to multipart streams
   const handleProfilePicUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -84,21 +84,18 @@ export default function UserProfile() {
     }
   };
 
-  // 🔥 UPDATED ACTION: Initiates the multi-step verification tree if the email field has changed
+  // Initiates the multi-step verification tree if the email field has changed
   const handleSaveChanges = async (e) => {
     e.preventDefault();
     try {
       setIsSaving(true);
       setActionMessage({ text: '', isError: false });
 
-      // Check if email changed from initial mount records
       if (formData.email !== user.email) {
-        // Trigger step 1 backend verification token dispatch
         await axiosInstance.post('users/request-email-update/', { email: formData.email });
         setIsOtpStep(true);
         setActionMessage({ text: '📩 An authorization code was sent to your new email.', isError: false });
       } else {
-        // Safe update execution for only metadata fields like fullname
         const response = await axiosInstance.put('users/profile/', { fullname: formData.fullname });
         setUser(response.data);
         setIsEditing(false);
@@ -112,18 +109,16 @@ export default function UserProfile() {
     }
   };
 
-  // 🔥 NEW ACTION: Finalizes database verification once the OTP is input correctly
+  // Finalizes database verification once the OTP is input correctly
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     try {
       setIsSaving(true);
-      const response = await axiosInstance.post('users/confirm-email-update/', { code: otpCode });
+      await axiosInstance.post('users/confirm-email-update/', { code: otpCode });
       
-      // Update full local data model arrays
       const finalResponse = await axiosInstance.put('users/profile/', { fullname: formData.fullname });
       setUser(finalResponse.data);
       
-      // Complete state changes
       setIsEditing(false);
       setIsOtpStep(false);
       setOtpCode('');
@@ -166,6 +161,26 @@ export default function UserProfile() {
     }
   }, [actionMessage.text, isOtpStep]);
 
+  // Helper date formatter function
+  const formatDate = (rawDate) => {
+    if (!rawDate) return 'N/A';
+      const cleanCheck = rawDate.replace(/[TZtz]/g, '');
+      if (/[a-zA-Z]/.test(cleanCheck)) return rawDate;
+
+      try {
+        const date = new Date(rawDate);
+        return isNaN(date.getTime()) 
+          ? rawDate 
+          : new Intl.DateTimeFormat('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            }).format(date);
+      } catch (e) {
+        return rawDate;
+      }
+    };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50/50 flex flex-col">
@@ -200,7 +215,6 @@ export default function UserProfile() {
           <div className="space-y-6">
             <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 text-center flex flex-col items-center relative group">
               
-              {/* 🔥 NEW PROFILE PICTURE CONTAINER WIDGET CONTAINER LAYOUT */}
               <div className="w-24 h-24 rounded-2xl bg-violet-600 text-white flex items-center justify-center font-black text-3xl uppercase shadow-md mb-4 relative overflow-hidden border border-slate-100">
                 {user?.profile_picture ? (
                   <img src={user.profile_picture} alt="Avatar" className="w-full h-full object-cover" />
@@ -208,25 +222,31 @@ export default function UserProfile() {
                   <span>{user?.fullname ? user.fullname.charAt(0) : '?'}</span>
                 )}
                 
-                {/* Micro-spinner backdrop layer during processing runs */}
                 {isUploadingPic && (
                   <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" /></div>
                 )}
               </div>
 
-              {/* Upload Trigger button layer targeting input directly */}
               <input type="file" ref={fileInputRef} onChange={handleProfilePicUpload} className="hidden" accept="image/*" />
               <button 
                 type="button" 
-                onClick={() => fileInputRef.current.click()} 
+                onClick={() => fileInputRef.current.click()}
                 className="text-xs text-violet-600 hover:text-violet-700 font-bold tracking-wide transition cursor-pointer mb-2 bg-transparent border-0"
               >
                 📸 Update Picture
               </button>
               
               <h2 className="text-lg font-bold text-slate-800 truncate max-w-full">{user?.fullname || 'System User'}</h2>
-              <div className="mt-2 pt-4 border-t border-slate-100 w-full flex justify-center">
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${user?.is_staff ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>{user?.is_staff ? '⚡ Global Staff Administrator' : '👤 Verified User'}</span>
+              
+              <div className="mt-2 pt-4 border-t border-slate-100 w-full flex flex-col items-center space-y-2">
+                {/* Premium Status Badge Display */}
+                {user?.is_subscribed ? (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border bg-amber-50 text-amber-700 border-amber-200 shadow-sm">
+                    👑 Premium Pro Member
+                  </span>
+                ) : (
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${user?.is_staff ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>{user?.is_staff ? '⚡ Global Staff Administrator' : '👤 Verified User'}</span>
+                )}
               </div>
             </div>
 
@@ -248,7 +268,6 @@ export default function UserProfile() {
                   )}
                 </div>
 
-                {/* 🔥 WORKSPACE INTERFACE MULTI-STEP ROUTING RENDERS CONDITIONAL SUBMISSION WORKFLOWS */}
                 {!isOtpStep ? (
                   <form onSubmit={handleSaveChanges}>
                     <div className="p-6 space-y-6">
@@ -266,34 +285,27 @@ export default function UserProfile() {
                         </div>
                       </div>
 
-                      {/* 🔥 UPDATED DATE JOINED DISPLAY BLOCK */}
+                      {/* Subscription Status & Expiry Row */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center pb-4 border-b border-slate-100 last:border-0 last:pb-0">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Subscription Expiry</span>
+                        <div className="sm:col-span-2">
+                          {user?.is_subscribed ? (
+                            <span className="block text-sm font-semibold text-amber-700 bg-amber-50/60 border border-amber-100 px-4 py-2.5 rounded-xl shadow-inner">
+                              Expires on {formatDate(user?.subscription_expires_at)}
+                            </span>
+                          ) : (
+                            <span className="block text-sm font-semibold text-gray-500 bg-slate-50 border border-slate-100 px-4 py-2.5 rounded-xl shadow-inner select-none">
+                              No Active Subscription Pass
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
                       {(user?.date_joined || user?.joined_date) && (
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center pb-4 border-b border-slate-100 last:border-0 last:pb-0">
                           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Date Joined</span>
                           <span className="sm:col-span-2 text-sm font-semibold text-slate-600 bg-slate-50 border border-slate-100 px-4 py-2.5 rounded-xl shadow-inner select-none">
-                            {(() => {
-                              // 1. Grab whatever date string field the backend sent us
-                              const rawDate = user.date_joined || user.joined_date;
-                              
-                              // 2. If the backend already formatted it (contains words like 'May' or 'June'), show it directly!
-                              if (/[a-zA-Z]/.test(rawDate)) {
-                                return rawDate;
-                              }
-
-                              // 3. Fallback: If it's a raw long timestamp string, format it cleanly on the fly
-                              try {
-                                const date = new Date(rawDate);
-                                return isNaN(date.getTime()) 
-                                  ? rawDate 
-                                  : new Intl.DateTimeFormat('en-US', {
-                                      year: 'numeric',
-                                      month: 'long',
-                                      day: 'numeric'
-                                    }).format(date);
-                              } catch (e) {
-                                return rawDate;
-                              }
-                            })()}
+                            {formatDate(user.date_joined || user.joined_date)}
                           </span>
                         </div>
                       )}
@@ -311,7 +323,6 @@ export default function UserProfile() {
                     </div>
                   </form>
                 ) : (
-                  // 🔥 NEW OTP CONFIRMATION VIEW SUB-FORM SCREEN INTERFACE
                   <form onSubmit={handleVerifyOtp}>
                     <div className="p-6 space-y-4 text-center max-w-sm mx-auto">
                       <span className="text-3xl block mb-1">🔑</span>

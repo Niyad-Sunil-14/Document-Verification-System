@@ -7,6 +7,7 @@ export default function Upload() {
   const navigate = useNavigate();
 
   // 1. STATE MANAGEMENT
+  const [user, setUser] = useState(null); // Added user profile state tracking
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isPdf, setIsPdf] = useState(false); 
@@ -14,8 +15,32 @@ export default function Upload() {
   const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState({ text: '', isError: false });
   
-  // 🔥 NEW STATE: Tracks specific sub-stages of checkout vs file transmission
+  // Tracks specific sub-stages of checkout vs file transmission
   const [paymentStage, setPaymentStage] = useState('IDLE'); // IDLE, INITIATED, SUCCESS
+
+  // Fetch identity profile on mount to check credits balance availability
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const response = await axiosInstance.get('users/profile/');
+        setUser(response.data);
+      } catch (err) {
+        console.error("Failed fetching credits context profile:", err);
+      }
+    };
+    fetchProfile();
+  }, []);
+
+  // Helper function to load Razorpay SDK dynamically via Promises
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
 
   // 2. DETECT FILE TYPE & MANAGE PREVIEW BLOB
   useEffect(() => {
@@ -45,7 +70,7 @@ export default function Upload() {
     }
   };
 
-  // 3. INTERCEPTED PAYMENT & FILE TRANSMISSION WORKFLOW
+  // 3. OPTIMIZED PAYMENT & FILE TRANSMISSION WORKFLOW
   const handlePaymentAndUpload = async (e) => {
     e.preventDefault();
 
@@ -54,19 +79,61 @@ export default function Upload() {
       return;
     }
 
+    // 🚀 BYPASS GATEWAY OPTIMIZATION: Check if user has available credits
+    if (user && user.document_credits > 0) {
+      try {
+        setIsUploading(true);
+        setMessage({ text: '', isError: false });
+        setPaymentStage('SUCCESS'); // Jump right into submission parsing stage
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('document_type', documentType);
+        formData.append('use_credit', 'true'); // Flag letting backend know to subtract a credit token
+
+        await axiosInstance.post('documents/upload/', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        setMessage({ text: '🎉 Document processed instantly using account credit!', isError: false });
+        setFile(null); 
+
+        setTimeout(() => {
+          navigate('/user-dashboard'); 
+        }, 2000);
+
+      } catch (uploadErr) {
+        console.error("Credit extraction pipeline crash:", uploadErr);
+        setMessage({ 
+          text: uploadErr.response?.data?.detail || 'Server storage verification registration timed out.', 
+          isError: true 
+        });
+        setIsUploading(false);
+        setPaymentStage('IDLE');
+      }
+      return; // Stop function loop early to skip payment module setup
+    }
+
+    // 💳 FALLBACK ROADMAP: Standard Pay-As-You-Verify process when credits run empty
     try {
       setIsUploading(true);
       setMessage({ text: '', isError: false });
       setPaymentStage('INITIATED');
 
-      // Step A: Contact backend payment module to create the Razorpay Order
+      const isScriptLoaded = await loadRazorpayScript();
+      if (!isScriptLoaded) {
+        setMessage({ text: 'Razorpay SDK failed to download. Check your network configuration.', isError: true });
+        setIsUploading(false);
+        setPaymentStage('IDLE');
+        return;
+      }
+
       const orderResponse = await axiosInstance.post('documents/payments/create-order/', {
         document_type: documentType,
       });
 
       const { order_id, amount, currency, razorpay_key_id, user_details } = orderResponse.data;
 
-      // Step B: Formulate Razorpay checkout options mapping signatures
       const options = {
         key: razorpay_key_id,
         amount: amount,
@@ -74,13 +141,10 @@ export default function Upload() {
         name: 'DocVerify System',
         description: `${documentType.replace(/_/g, ' ')} Processing Fee`,
         order_id: order_id,
-        
-        // Fired automatically when checkout completes inside the popup frame window
         handler: async function (paymentInfo) {
           try {
             setPaymentStage('SUCCESS');
             
-            // Step C: Compile the combined Multipart file dataset + payment credentials
             const formData = new FormData();
             formData.append('file', file);
             formData.append('document_type', documentType);
@@ -88,11 +152,8 @@ export default function Upload() {
             formData.append('razorpay_order_id', paymentInfo.razorpay_order_id);
             formData.append('razorpay_signature', paymentInfo.razorpay_signature);
 
-            // Transmit file data straight to document architecture backend endpoints
             await axiosInstance.post('documents/upload/', formData, {
-              headers: {
-                'Content-Type': 'multipart/form-data',
-              },
+              headers: { 'Content-Type': 'multipart/form-data' },
             });
 
             setMessage({ text: '🎉 Payment authorized and document uploaded successfully!', isError: false });
@@ -116,7 +177,7 @@ export default function Upload() {
           email: user_details?.email || '',
         },
         theme: {
-          color: '#4f46e5', // Brand matching violet indigo palette tone specifications
+          color: '#4f46e5', 
         },
         modal: {
           ondismiss: function () {
@@ -127,7 +188,6 @@ export default function Upload() {
         }
       };
 
-      // Step D: Open up the interactive popup payment screen module window 
       const rzpWindow = new window.Razorpay(options);
       rzpWindow.open();
 
@@ -164,6 +224,17 @@ export default function Upload() {
 
         {/* CORE FORM MODULE */}
         <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 sm:p-8">
+          
+          {/* Visual Credits Indicator Badge */}
+          {user && user.is_subscribed ? (
+            <div className="mb-6 p-3 bg-violet-50 border border-violet-100 rounded-xl flex justify-between items-center text-xs text-violet-700 font-medium">
+              <span>Available Document Upload Balance:</span>
+              <span className="bg-violet-600 text-white font-bold px-2.5 py-1 rounded-md">
+                {user.document_credits} Credits
+              </span>
+            </div>
+          ): ""}
+
           <form onSubmit={handlePaymentAndUpload} className="space-y-6">
             
             {/* CLASSIFICATION CONFIG */}
@@ -178,7 +249,7 @@ export default function Upload() {
                 disabled={isUploading}
                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition text-slate-800 shadow-sm"
               >
-                <option value="PASSPORT"> Pasport Scan</option>
+                <option value="PASSPORT"> Passport Scan</option>
                 <option value="DRIVERS LICENSE"> Drivers License</option>
                 <option value="ID CARD"> Government Issued ID Card</option>
                 <option value="INVOICE"> Commercial Invoice</option>
@@ -283,7 +354,9 @@ export default function Upload() {
                     </span>
                   </div>
                 ) : (
-                  <span>Verify and Process Checkout</span>
+                  <span>
+                    {user && user.document_credits > 0 ? '1 credits' : 'Verify and Pay'}
+                  </span>
                 )}
               </button>
             </div>

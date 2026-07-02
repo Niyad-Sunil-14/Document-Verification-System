@@ -5,9 +5,11 @@ import axiosInstance from '../../../api/Axiosinstance';
 
 export default function Pricing() {
   const navigate = useNavigate();
-  const [paying, setPaying] = useState(false);
+  
+  // 🔥 FIXED: Track the specific plan identifier string instead of a boolean flag
+  const [processingPlan, setProcessingPlan] = useState(null); 
 
-  // Helper function to load Razorpay SDK dynamically
+  // Helper function to load Razorpay SDK dynamically via Promises
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
       const script = document.createElement('script');
@@ -19,23 +21,22 @@ export default function Pricing() {
   };
 
   // Razorpay Checkout Gateway Implementation
-  const handleSubscriptionPayment = async () => {
+  const handleSubscriptionPayment = async (planType, amountInRupees, planDescription) => {
     try {
-      setPaying(true);
+      setProcessingPlan(planType); // Set the current plan active text indicator
 
-      // 1. Initialize script validation
+      // 1. Initialize script validation via Promise loop
       const isLoaded = await loadRazorpayScript();
       if (!isLoaded) {
         alert('Razorpay SDK failed to load. Check your network terminal loops.');
-        setPaying(false);
+        setProcessingPlan(null);
         return;
       }
 
-      // 2. Generate subscription record/order from your FastAPI/Django backend configuration setup
-      // Update this endpoint string to match your backend subscription initiation route!
+      // 2. Generate subscription order parameters dynamically
       const orderResponse = await axiosInstance.post('documents/payments/create-subscription/', {
-        plan_type: 'monthly_premium',
-        amount: 299
+        plan_type: planType,
+        amount: amountInRupees
       });
 
       const { order_id, amount, currency, key_id, user_details } = orderResponse.data;
@@ -46,7 +47,7 @@ export default function Pricing() {
         amount: amount, 
         currency: currency,
         name: 'DocVerify System',
-        description: 'Monthly Premium Pass - 12 Free Upload Credits',
+        description: planDescription,
         image: '/logo.png',
         order_id: order_id,
         handler: async function (response) {
@@ -64,6 +65,8 @@ export default function Pricing() {
           } catch (err) {
             console.error('Subscription validation failed:', err);
             alert('Payment execution verified locally but rejected on cryptographic signature validation.');
+          } finally {
+            setProcessingPlan(null);
           }
         },
         prefill: {
@@ -71,8 +74,13 @@ export default function Pricing() {
           email: user_details?.email || '',
         },
         theme: {
-          color: '#7c3aed', // Matches your violet color scheme layout
+          color: '#7c3aed', 
         },
+        modal: {
+          ondismiss: function () {
+            setProcessingPlan(null);
+          }
+        }
       };
 
       const paymentObject = new window.Razorpay(options);
@@ -81,13 +89,13 @@ export default function Pricing() {
     } catch (error) {
       console.error('Payment gateway pipeline failed:', error);
       alert(error.response?.data?.detail || 'Failed to initialize payment gateway.');
-    } finally {
-      setPaying(false);
+      setProcessingPlan(null);
     }
   };
 
   const tiers = [
     {
+      id: 'starter_pack',
       name: 'Starter Pack', 
       price: '₹99',
       period: '/ month',
@@ -99,11 +107,12 @@ export default function Pricing() {
         '48-hour secure document cloud logs retention'
       ],
       cta: 'Choose Starter Pack',
-      isCurrent: false, // Set to true if this is the user's active plan based on your backend response
+      isCurrent: false, 
       highlighted: false,
-      link: '/upload' // Can be wired up to a ₹99 Razorpay order creation gateway later
+      onClick: () => handleSubscriptionPayment('starter_pack', 99, 'Starter Pack Subscription - 3 Upload Credits')
     },
     {
+      id: 'monthly_premium',
       name: 'Monthly Premium Pass',
       price: '₹299',
       period: '/ month',
@@ -116,12 +125,13 @@ export default function Pricing() {
         'Priority account activity log exports',
         'Dedicated backup document logs access'
       ],
-      cta: paying ? 'Processing Portal...' : 'Subscribe Now',
+      cta: 'Subscribe Now',
       isCurrent: false,
       highlighted: true,
-      onClick: handleSubscriptionPayment // Trigger checkout process
+      onClick: () => handleSubscriptionPayment('monthly_premium', 299, 'Monthly Premium Pass - 12 Upload Credits')
     },
     {
+      id: 'pay_as_you_verify',
       name: 'Pay-As-You-Verify',
       price: '₹49',
       period: '/ document',
@@ -204,10 +214,11 @@ export default function Pricing() {
                   ) : tier.onClick ? (
                     <button 
                       onClick={tier.onClick}
-                      disabled={paying}
+                      disabled={processingPlan !== null}
                       className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-4 rounded-xl text-sm transition shadow-md disabled:opacity-50"
                     >
-                      {tier.cta}
+                      {/* 🔥 Dynamic per-button status update */}
+                      {processingPlan === tier.id ? 'Processing Portal...' : tier.cta}
                     </button>
                   ) : (
                     <Link 

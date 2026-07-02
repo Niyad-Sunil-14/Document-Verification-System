@@ -8,7 +8,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomUser
-        fields = ['id', 'username', 'email', 'fullname', 'profile_picture', 'joined_date', 'is_staff','document_credits','is_subscribed']
+        fields = ['id', 'username', 'email', 'fullname', 'profile_picture', 'joined_date', 'is_staff','document_credits','is_subscribed','subscription_expires_at']
         read_only_fields = ['username', 'is_staff']
 
     def get_joined_date(self, obj):

@@ -49,181 +49,186 @@ class DocumentUploadView(APIView):
     def post(self, request, *args, **kwargs):
         user = request.user
         
-        # 🔥 A: Credit & Subscription Guard Layer
-        if not user.is_subscribed and user.document_credits <= 0:
-            # If they aren't premium and have no free trials left, throw an action lock
-            return Response(
-                {"detail": "Out of verification credits. Please upgrade your plan or pay per single verification loop."},
-                status=status.HTTP_402_PAYMENT_REQUIRED
-            )
-
-        serializer = DocumentUploadSerializer(data=request.data)
+        # Check if the frontend requested to skip the gateway via an available credit token
+        use_credit = request.data.get('use_credit') == 'true'
         
-        if serializer.is_valid():
-            # =================================================================
-            # 🔥 STEP A: INTERCEPT & SECURELY VERIFY RAZORPAY BILLING TOKENS
-            # =================================================================
-            rzp_order_id = serializer.validated_data.get('razorpay_order_id')
-            rzp_payment_id = serializer.validated_data.get('razorpay_payment_id')
-            rzp_signature = serializer.validated_data.get('razorpay_signature')
-            
-            try:
-                # Initialize Razorpay SDK client using your verified settings keys
-                client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-                
-                verification_payload = {
-                    'razorpay_order_id': rzp_order_id,
-                    'razorpay_payment_id': rzp_payment_id,
-                    'razorpay_signature': rzp_signature
-                }
-                
-                # Cryptographically verifies signature matching. Crashes to exception if tampered with.
-                client.utility.verify_payment_signature(verification_payload)
-                logger.info(f"🛡️ Razorpay Payment verified for Order ID: {rzp_order_id}")
-                
-            except Exception as pay_err:
-                logger.error(f"🚨 Payment Signature Integrity Check Failed: {pay_err}")
-                return Response(
-                    {"detail": "Payment security validation signature mismatch. Processing terminated."}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+        serializer = DocumentUploadSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            # =================================================================
-            # STEP B: CORE OCR PIPELINE MANAGEMENT (Your Original Logic)
-            # =================================================================
-            uploaded_file = request.FILES['file']
-            document_type = serializer.validated_data.get('document_type', '')
-            original_filename = uploaded_file.name
-            
-            is_pdf_file = original_filename.lower().endswith('.pdf')
-            text = ""
-            ocr_accuracy_score = 0.0
-            ocr_pipeline_status = "PENDING"
-            
-            temp_filename = None
-            try:
-                suffix = os.path.splitext(original_filename)[1]
-                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
-                    for chunk in uploaded_file.chunks():
-                        temp_file.write(chunk)
-                    temp_filename = temp_file.name
+        # =================================================================
+        # STEP A: BILLING SECURITY & CREDIT BALANCE GUARD LAYER
+        # =================================================================
+        rzp_order_id = serializer.validated_data.get('razorpay_order_id')
+        rzp_payment_id = serializer.validated_data.get('razorpay_payment_id')
+        rzp_signature = serializer.validated_data.get('razorpay_signature')
 
-                processed_image = None
-
-                if is_pdf_file:
-                    logger.info(f"Converting PDF {original_filename} pages to image elements...")
-                    pages = convert_from_path(temp_filename, first_page=1, last_page=1)
-                    
-                    if pages:
-                        opencv_img = pil_to_opencv(pages[0])
-                        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as img_temp:
-                            cv2.imwrite(img_temp.name, opencv_img)
-                            processed_image = preprocess_image_for_ocr(img_temp.name)
-                            
-                            try:
-                                os.remove(img_temp.name)
-                            except:
-                                pass
-                else:
-                    processed_image = preprocess_image_for_ocr(temp_filename)
-
-                if processed_image is not None:
-                    text = pytesseract.image_to_string(processed_image)
-                    ocr_data = pytesseract.image_to_data(processed_image, output_type=Output.DICT)
-                    
-                    valid_confidences = [int(c) for c in ocr_data['conf'] if int(c) > -1]
-                    if valid_confidences:
-                        calculated_accuracy = sum(valid_confidences) / len(valid_confidences)
-                        ocr_accuracy_score = round(calculated_accuracy, 2)
-                        ocr_pipeline_status = "PROCESSED"
-                    else:
-                        ocr_pipeline_status = "FAILED"
-                else:
-                    ocr_pipeline_status = "FAILED"
-
-            except Exception as ocr_err:
-                logger.error(f"OCR Pipeline failed: {ocr_err}")
-                ocr_accuracy_score = 0.0
-                ocr_pipeline_status = "FAILED"
-            
-            finally:
-                if temp_filename and os.path.exists(temp_filename):
-                    try:
-                        os.remove(temp_filename)
-                    except Exception as e:
-                        logger.error(f"Failed to delete temp file {temp_filename}: {e}")
-
-            uploaded_file.seek(0)
-
-            # =================================================================
-            # STEP C: STORAGE ROUTING & MODEL RECORD ENTRIES
-            # =================================================================
-            try:
-                cloudinary.config(
-                    cloud_name=env('CLOUDINARY_CLOUD_NAME'),
-                    api_key=env('CLOUDINARY_API_KEY'),
-                    api_secret=env('CLOUDINARY_API_SECRET'),
-                    secure=True
-                )
+        if use_credit:
+            # Atomic database transaction block to prevent multi-tab concurrency bypass bugs
+            with transaction.atomic():
+                # Re-fetch user inside transaction lock for real-time balance checking
+                current_user = request.user.__class__.objects.select_for_update().get(id=user.id)
                 
-                determined_resource_type = "raw" if is_pdf_file else "image"
-                
-                logger.info(f"Uploading file {original_filename} to Cloudinary...")
-                
-                upload_result = cloudinary.uploader.upload(
-                    uploaded_file,
-                    folder="user_documents/",
-                    resource_type=determined_resource_type
-                )
-                
-                secure_url = upload_result.get("secure_url")
-                
-                with transaction.atomic():
-                    # 🔥 FIX: Since we are inside the verified payment block, 
-                    # we explicitly save the tracking parameters right here!
-                    document = Document.objects.create(
-                        user=request.user,
-                        document_type=document_type,
-                        file=secure_url,
-                        filename=original_filename, 
-                        status="PENDING",
-                        ocr_status=ocr_pipeline_status,
-                        ocr_accuracy=ocr_accuracy_score,
-                        extracted_text=text.strip() if text else "",
-                        
-                        # Add your field mappings right here during instance initialization
-                        razorpay_order_id=rzp_order_id,
-                        razorpay_payment_id=rzp_payment_id,
-                        payment_verified=True # 🔥 Mark it verified immediately!
+                if current_user.document_credits <= 0:
+                    return Response(
+                        {"detail": "Out of account credits. Please purchase a plan or use Pay-As-You-Verify."},
+                        status=status.HTTP_402_PAYMENT_REQUIRED
                     )
 
-                    if not serializer.validated_data.get('razorpay_payment_id'):
-                        user.document_credits -= 1
-                        user.save()
+                # Deduct one token credit line item safely
+                current_user.document_credits -= 1
+                current_user.save()
+                logger.info(f"🪙 1 Account credit token deducted for User ID: {user.id}")
+        else:
+            # Fallback to validating cryptographic signatures for direct checkout orders
+            if not user.is_subscribed and user.document_credits <= 0:
+                if not all([rzp_order_id, rzp_payment_id, rzp_signature]):
+                    return Response(
+                        {"detail": "Out of verification credits. Please upgrade your plan or pay per single verification loop."},
+                        status=status.HTTP_402_PAYMENT_REQUIRED
+                    )
+            
+            # If billing data is provided, execute the payment gateway verification handshake
+            if all([rzp_order_id, rzp_payment_id, rzp_signature]):
+                try:
+                    client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+                    verification_payload = {
+                        'razorpay_order_id': rzp_order_id,
+                        'razorpay_payment_id': rzp_payment_id,
+                        'razorpay_signature': rzp_signature
+                    }
+                    client.utility.verify_payment_signature(verification_payload)
+                    logger.info(f"🛡️ Razorpay Payment verified for Order ID: {rzp_order_id}")
+                except Exception as pay_err:
+                    logger.error(f"🚨 Payment Signature Integrity Check Failed: {pay_err}")
+                    return Response(
+                        {"detail": "Payment security validation signature mismatch. Processing terminated."}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-                logger.info(f"🎉 File {original_filename} successfully saved and marked as PAID in database.")
-
-                return Response(
-                    {
-                        "id": document.id, 
-                        "document_type": document.document_type,
-                        "file": document.file, 
-                        "filename": original_filename,
-                        "status": document.status,
-                        "payment_verified": True # Return success metric to React dashboard
-                    },
-                    status=status.HTTP_201_CREATED
-                )
-                
-            except Exception as upload_error:
-                logger.error(f"Cloudinary upload failed: {upload_error}")
-                return Response(
-                    {"error": f"Cloudinary upload failed: {str(upload_error)}"}, 
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
+        # =================================================================
+        # STEP B: CORE OCR PIPELINE MANAGEMENT
+        # =================================================================
+        uploaded_file = request.FILES['file']
+        document_type = serializer.validated_data.get('document_type', '')
+        original_filename = uploaded_file.name
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+        is_pdf_file = original_filename.lower().endswith('.pdf')
+        text = ""
+        ocr_accuracy_score = 0.0
+        ocr_pipeline_status = "PENDING"
+        
+        temp_filename = None
+        try:
+            suffix = os.path.splitext(original_filename)[1]
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+                for chunk in uploaded_file.chunks():
+                    temp_file.write(chunk)
+                temp_filename = temp_file.name
+
+            processed_image = None
+
+            if is_pdf_file:
+                logger.info(f"Converting PDF {original_filename} pages to image elements...")
+                pages = convert_from_path(temp_filename, first_page=1, last_page=1)
+                
+                if pages:
+                    opencv_img = pil_to_opencv(pages[0])
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as img_temp:
+                        cv2.imwrite(img_temp.name, opencv_img)
+                        processed_image = preprocess_image_for_ocr(img_temp.name)
+                        try:
+                            os.remove(img_temp.name)
+                        except:
+                            pass
+            else:
+                processed_image = preprocess_image_for_ocr(temp_filename)
+
+            if processed_image is not None:
+                text = pytesseract.image_to_string(processed_image)
+                ocr_data = pytesseract.image_to_data(processed_image, output_type=Output.DICT)
+                
+                valid_confidences = [int(c) for c in ocr_data['conf'] if int(c) > -1]
+                if valid_confidences:
+                    calculated_accuracy = sum(valid_confidences) / len(valid_confidences)
+                    ocr_accuracy_score = round(calculated_accuracy, 2)
+                    ocr_pipeline_status = "PROCESSED"
+                else:
+                    ocr_pipeline_status = "FAILED"
+            else:
+                ocr_pipeline_status = "FAILED"
+
+        except Exception as ocr_err:
+            logger.error(f"OCR Pipeline failed: {ocr_err}")
+            ocr_accuracy_score = 0.0
+            ocr_pipeline_status = "FAILED"
+        
+        finally:
+            if temp_filename and os.path.exists(temp_filename):
+                try:
+                    os.remove(temp_filename)
+                except Exception as e:
+                    logger.error(f"Failed to delete temp file {temp_filename}: {e}")
+
+        uploaded_file.seek(0)
+
+        # =================================================================
+        # STEP C: STORAGE ROUTING & MODEL RECORD ENTRIES
+        # =================================================================
+        try:
+            cloudinary.config(
+                cloud_name=env('CLOUDINARY_CLOUD_NAME'),
+                api_key=env('CLOUDINARY_API_KEY'),
+                api_secret=env('CLOUDINARY_API_SECRET'),
+                secure=True
+            )
+            
+            determined_resource_type = "raw" if is_pdf_file else "image"
+            logger.info(f"Uploading file {original_filename} to Cloudinary...")
+            
+            upload_result = cloudinary.uploader.upload(
+                uploaded_file,
+                folder="user_documents/",
+                resource_type=determined_resource_type
+            )
+            
+            secure_url = upload_result.get("secure_url")
+            
+            with transaction.atomic():
+                document = Document.objects.create(
+                    user=request.user,
+                    document_type=document_type,
+                    file=secure_url,
+                    filename=original_filename, 
+                    status="PENDING",
+                    ocr_status=ocr_pipeline_status,
+                    ocr_accuracy=ocr_accuracy_score,
+                    extracted_text=text.strip() if text else "",
+                    razorpay_order_id=rzp_order_id if rzp_order_id else "",
+                    razorpay_payment_id=rzp_payment_id if rzp_payment_id else "",
+                    payment_verified=True
+                )
+
+            logger.info(f"🎉 File {original_filename} successfully saved and marked as PROCESSED in database.")
+
+            return Response(
+                {
+                    "id": document.id, 
+                    "document_type": document.document_type,
+                    "file": document.file, 
+                    "filename": original_filename,
+                    "status": document.status,
+                    "payment_verified": True
+                },
+                status=status.HTTP_201_CREATED
+            )
+            
+        except Exception as upload_error:
+            logger.error(f"Cloudinary upload failed: {upload_error}")
+            return Response(
+                {"error": f"Cloudinary upload failed: {str(upload_error)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )    
 
 
 
@@ -569,9 +574,17 @@ class CreateSubscriptionView(APIView):
         try:
             user = request.user
             
-            # 🚀 FIXED: We use a robust, globally available one-time order generation 
-            # pipeline instead of Razorpay's restrictive plan schema structure.
-            amount_in_paisa = 299 * 100  # ₹299 = 29900 Paise
+            # 🚀 DYNAMIC: Read incoming plan specs from the frontend request
+            plan_type = request.data.get('plan_type', 'monthly_premium')
+            
+            # Map out values based on the front-end tier arguments
+            if plan_type == 'starter_pack':
+                amount_in_paisa = 99 * 100  # ₹99 = 9900 Paise
+                plan_name = "Starter Pack Subscription"
+            else:
+                amount_in_paisa = 299 * 100  # ₹299 = 29900 Paise
+                plan_name = "Monthly Premium Pass"
+
             currency = "INR"
 
             order_data = {
@@ -581,15 +594,15 @@ class CreateSubscriptionView(APIView):
                 "notes": {
                     "user_id": str(user.id),
                     "fullname": user.fullname,
-                    "plan_type": "monthly_premium"
+                    "plan_type": plan_type  # Saved to verify which plan to add on successful signature match
                 }
             }
 
-            # Generate order context natively without crashing
+            # Generate order context dynamically with correct price point
             razorpay_order = razorpay_client.order.create(data=order_data)
 
             return Response({
-                "order_id": razorpay_order['id'],  # Passes back standard order reference cleanly
+                "order_id": razorpay_order['id'],
                 "amount": amount_in_paisa,
                 "currency": currency,
                 "key_id": settings.RAZORPAY_KEY_ID,
@@ -597,7 +610,7 @@ class CreateSubscriptionView(APIView):
                     "fullname": user.fullname,
                     "email": user.email
                 }
-            }, status=status.HTTP_201_CREATED)
+              }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             logger.error(f"Subscription creation error: {str(e)}")
@@ -628,26 +641,36 @@ class VerifySubscriptionView(APIView):
             except razorpay.errors.SignatureVerificationError:
                 return Response({"detail": "Cryptographic signature validation check failed."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # --- 🔥 SUCCESS: UPDATE USER PROFILE HERE ---
+            # --- SUCCESS: STACK PROFILE CREDITS BASED ON THE ORDER DETAILS ---
             user = request.user
-            user.is_subscribed = True
-            user.document_credits += 12  # Give them their 12 free uploads
             
-            # 🔥 Dynamic Expiry Extension Logic
+            # Fetch the completed order object from Razorpay to read the metadata notes safely
+            rzp_order = razorpay_client.order.fetch(razorpay_order_id)
+            plan_type = rzp_order.get('notes', {}).get('plan_type', 'monthly_premium')
+
+            user.is_subscribed = True
+            
+            # 🚀 Allocate credits according to plan features
+            if plan_type == 'starter_pack':
+                user.document_credits += 3  # Add 3 uploads for Starter Pack
+                plan_display_name = "Starter Pack"
+            else:
+                user.document_credits += 12  # Add 12 uploads for Premium Pass
+                plan_display_name = "Monthly Premium Pass"
+
+            # Dynamic Expiry Extension Logic (stacks dates cleanly)
             if user.subscription_expires_at and user.subscription_expires_at > timezone.now():
-                # If their current subscription is still active, add 30 days onto the existing expiry date
                 user.subscription_expires_at = user.subscription_expires_at + timedelta(days=30)
             else:
-                # If they don't have an active subscription or it expired already, start 30 days from right now
                 user.subscription_expires_at = timezone.now() + timedelta(days=30)
-            user.save()
-            
 
-            # Create a notification for them
+            user.save()
+
+            # Create notification log
             Notification.objects.create(
                 user=user,
                 title="💳 Subscription Activated",
-                description="Your Monthly Premium Pass is live! 12 document upload credits added."
+                description=f"Your {plan_display_name} is live! Document upload credits updated successfully."
             )
 
             return Response({"status": "Subscription confirmed successfully"}, status=status.HTTP_200_OK)

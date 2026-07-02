@@ -4,9 +4,9 @@ from .models import Document,Notification
 class DocumentUploadSerializer(serializers.ModelSerializer):
     file = serializers.FileField(write_only=True)
     username = serializers.ReadOnlyField(source='user.fullname')
-    razorpay_order_id = serializers.CharField(write_only=True, required=True)
-    razorpay_payment_id = serializers.CharField(write_only=True, required=True)
-    razorpay_signature = serializers.CharField(write_only=True, required=True)
+    razorpay_order_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    razorpay_payment_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    razorpay_signature = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model = Document
