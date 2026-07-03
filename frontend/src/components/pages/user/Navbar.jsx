@@ -149,8 +149,16 @@ export default function Navbar() {
                 }}
                 className="flex text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 items-center space-x-2 border border-slate-200 p-1.5 pr-3 hover:bg-slate-50 transition cursor-pointer"
               >
-                <div className="w-8 h-8 rounded-lg bg-violet-600 text-white flex items-center justify-center font-bold text-sm uppercase shadow-sm">
-                  {user?.fullname ? user.fullname.charAt(0) : '?'}
+                <div className="w-8 h-8 rounded-lg bg-violet-600 text-white flex items-center justify-center font-bold text-sm uppercase shadow-sm overflow-hidden">
+                  {user?.profile_picture ? (
+                    <img 
+                      src={user.profile_picture} 
+                      alt="Profile" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span>{user?.fullname ? user.fullname.charAt(0) : '?'}</span>
+                  )}
                 </div>
                 <div className="text-left hidden lg:block">
                   <p className="text-xs font-bold text-slate-800 leading-tight">{user?.fullname || 'Loading...'}</p>

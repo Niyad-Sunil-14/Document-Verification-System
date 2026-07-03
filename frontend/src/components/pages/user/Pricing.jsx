@@ -77,8 +77,18 @@ export default function Pricing() {
           color: '#7c3aed', 
         },
         modal: {
-          ondismiss: function () {
-            setProcessingPlan(null);
+          ondismiss: async function () {
+            // Dynamic safety check: Only calls the function if it exists in this scope
+            if (window.setIsUploading) setIsUploading(false);
+            
+            try {
+              await axiosInstance.post('documents/payments/log-failure/', {
+                razorpay_order_id: order_id,
+                plan_type: planType
+              });
+            } catch (logErr) {
+              console.error("Failed capturing dropout log entry:", logErr);
+            }
           }
         }
       };

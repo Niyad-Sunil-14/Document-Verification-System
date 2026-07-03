@@ -116,3 +116,55 @@ class Notification(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+
+class Payment(models.Model):
+    PLAN_CHOICES = [
+        ('PAY_AS_YOU_VERIFY', 'Pay-As-You-Verify (₹49)'),
+        ('STARTER_PACK', 'Starter Pack (₹99)'),
+        ('MONTHLY_PREMIUM', 'Monthly Premium Pass (₹299)'),
+    ]
+
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('SUCCESS', 'Success'),
+        ('FAILED', 'Failed'),
+    ]
+
+    user = models.ForeignKey(
+        CustomUser, 
+        on_delete=models.CASCADE, 
+        related_name='payments'
+    )
+    
+    # Financial Structure details
+    plan_type = models.CharField(max_length=50, choices=PLAN_CHOICES)
+    amount = models.DecimalField(max_digits=10, decimal_places=2) 
+    currency = models.CharField(max_length=10, default='INR')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    
+    # Razorpay Transaction Identifiers
+    razorpay_order_id = models.CharField(max_length=255, unique=True)
+    razorpay_payment_id = models.CharField(max_length=255, blank=True, null=True)
+    razorpay_signature = models.CharField(max_length=555, blank=True, null=True)
+    
+    # 🔗 One-to-One connection mapping back to your uploaded document model
+    document = models.OneToOneField(
+        Document, 
+        on_delete=models.SET_NULL, 
+        blank=True, 
+        null=True, 
+        related_name='payment_record'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Payment Transaction"
+        verbose_name_plural = "Payment Transactions"
+
+    def __str__(self):
+        return f"{self.user.email} - {self.plan_type} ({self.amount}) - {self.status}"

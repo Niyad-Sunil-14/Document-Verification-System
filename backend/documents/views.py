@@ -26,7 +26,7 @@ from django.utils import timezone
 from datetime import timedelta
 
 import os
-from .models import Document,Notification
+from .models import Document,Notification,Payment
 from .serializers import (
     DocumentDetailSerializer,
     DocumentListSerializer,
@@ -209,6 +209,16 @@ class DocumentUploadView(APIView):
                     payment_verified=True
                 )
 
+            Payment.objects.create(
+                        user=user,
+                        plan_type='PAY_AS_YOU_VERIFY',
+                        amount=49.00,
+                        status='SUCCESS',
+                        razorpay_order_id=rzp_order_id,
+                        razorpay_payment_id=rzp_payment_id,
+                        razorpay_signature=rzp_signature,
+                        document=document  # Mapped directly to the newly parsed document record
+                    )
             logger.info(f"🎉 File {original_filename} successfully saved and marked as PROCESSED in database.")
 
             return Response(
@@ -480,7 +490,6 @@ class RazorpayWebhookView(APIView):
 
     def post(self, request, *args, **kwargs):
         # 1. Capture the absolute RAW body bytes and signature header
-        # Do NOT use request.data here, as DRF parses it into a dict, breaking hashes!
         webhook_body = request.body
         received_signature = request.headers.get('X-Razorpay-Signature', '')
         webhook_secret = getattr(settings, 'RAZORPAY_WEBHOOK_SECRET', '')
@@ -489,7 +498,6 @@ class RazorpayWebhookView(APIView):
         client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
         
         try:
-            # This explicitly validates webhook payloads using raw string formats
             client.utility.verify_webhook_signature(
                 webhook_body.decode('utf-8'), 
                 received_signature, 
@@ -499,7 +507,6 @@ class RazorpayWebhookView(APIView):
             
         except Exception as sig_err:
             logger.error(f"🚨 Razorpay webhook signature mismatch: {sig_err}")
-            # We still return a 400 here during setup because the keys are out of sync
             return Response({"detail": "Signature integrity verification failed."}, status=status.HTTP_400_BAD_REQUEST)
 
         # 3. If validation passes, read the event data safely
@@ -510,16 +517,34 @@ class RazorpayWebhookView(APIView):
             
             logger.info(f"📦 Intercepted Razorpay Event: {event_type}")
 
-            # Handle your database triggers safely
+            # 💰 SUCCESS EVENTS
             if event_type in ["order.paid", "payment.captured"]:
                 payment_entity = payload.get('payment', {}).get('entity', {})
                 razorpay_order_id = payment_entity.get('order_id')
                 razorpay_payment_id = payment_entity.get('id')
+                razorpay_signature = payment_entity.get('signature', '')
                 
-                print(f"💰 Confirmed payment capture for Order: {razorpay_order_id}")
-                # Optional: Your DB status updates here...
+                # Update our Payment tracker status to SUCCESS
+                Payment.objects.filter(razorpay_order_id=razorpay_order_id).update(
+                    status='SUCCESS',
+                    razorpay_payment_id=razorpay_payment_id,
+                    razorpay_signature=razorpay_signature
+                )
+                logger.info(f"💰 Confirmed payment capture for Order: {razorpay_order_id}")
 
-            # Always return 200 for validly signed payloads to silence retries
+            # ❌ FAILURE EVENTS (Bank declines, invalid cards, system dropping out)
+            elif event_type == "payment.failed":
+                payment_entity = payload.get('payment', {}).get('entity', {})
+                razorpay_order_id = payment_entity.get('order_id')
+                razorpay_payment_id = payment_entity.get('id')
+                
+                # Flag the payment instance record as permanently FAILED in our ledger table
+                Payment.objects.filter(razorpay_order_id=razorpay_order_id).update(
+                    status='FAILED',
+                    razorpay_payment_id=razorpay_payment_id
+                )
+                logger.warning(f"❌ Payment decline captured via Webhook for Order: {razorpay_order_id}")
+
             return Response({"status": "acknowledged"}, status=status.HTTP_200_OK)
 
         except Exception as parse_err:
@@ -649,6 +674,16 @@ class VerifySubscriptionView(APIView):
             plan_type = rzp_order.get('notes', {}).get('plan_type', 'monthly_premium')
 
             user.is_subscribed = True
+
+            Payment.objects.create(
+                user=user,
+                plan_type=plan_type.upper(),  # 'STARTER_PACK' or 'MONTHLY_PREMIUM'
+                amount=99.00 if plan_type == 'starter_pack' else 299.00,
+                status='SUCCESS',
+                razorpay_order_id=razorpay_order_id,
+                razorpay_payment_id=razorpay_payment_id,
+                razorpay_signature=razorpay_signature
+            )
             
             # 🚀 Allocate credits according to plan features
             if plan_type == 'starter_pack':
@@ -676,3 +711,56 @@ class VerifySubscriptionView(APIView):
             return Response({"status": "Subscription confirmed successfully"}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+
+#Payment Model View
+class PaymentHistoryListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        # 🚀 MODIFIED: Fetch both SUCCESS and FAILED transaction items
+        payments = Payment.objects.filter(
+            user=request.user, 
+            status__in=['SUCCESS', 'FAILED']
+        ).select_related('document')
+        
+        data = []
+        for payment in payments:
+            data.append({
+                "id": payment.id,
+                "plan_type": payment.plan_type,
+                "amount": float(payment.amount),
+                "razorpay_order_id": payment.razorpay_order_id,
+                "razorpay_payment_id": payment.razorpay_payment_id if payment.razorpay_payment_id else "N/A",
+                "created_at": payment.created_at.strftime("%Y-%m-%d %H:%M"),
+                "status": payment.status, # 🔥 Added status tracking string
+                "filename": payment.document.filename if payment.document else "Subscription Plan"
+            })
+            
+        return Response(data, status=status.HTTP_200_OK)
+    
+
+
+
+class LogPaymentFailureView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        order_id = request.data.get('razorpay_order_id')
+        plan_type = request.data.get('plan_type', 'PAY_AS_YOU_VERIFY').upper()
+
+        if not order_id:
+            return Response({"detail": "Missing order reference mapping."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Log or update a tracking line item marking the transaction attempt as FAILED
+        Payment.objects.update_or_create(
+            razorpay_order_id=order_id,
+            defaults={
+                "user": request.user,
+                "plan_type": plan_type,
+                "amount": 49.00 if plan_type == 'PAY_AS_YOU_VERIFY' else (99.00 if plan_type == 'STARTER_PACK' else 299.00),
+                "status": 'FAILED'
+            }
+        )
+        return Response({"status": "Failure log captured"}, status=status.HTTP_201_CREATED)

@@ -13,7 +13,8 @@ urlpatterns = [
     path('payments/create-order/', RazorpayOrderCreateView.as_view(), name='create-order'),
     path('payments/create-subscription/', CreateSubscriptionView.as_view(), name='create-subscription'),
     path('payments/verify-subscription/', VerifySubscriptionView.as_view(), name='verify-subscription'),
-
+    path('payments/history/',PaymentHistoryListView.as_view(),name='payment-history'),
+    path('payments/log-failure/', LogPaymentFailureView.as_view(), name='log-payment-failure'),
 
     # ADMIN SIDE
     path('admin-dashboard/', AdminDashboardMetricsView.as_view(), name='admin-dashboard-metrics'),
