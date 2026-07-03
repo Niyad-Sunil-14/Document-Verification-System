@@ -24,6 +24,8 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from datetime import timedelta
+from rest_framework.generics import RetrieveAPIView
+
 
 import os
 from .models import Document,Notification,Payment
@@ -204,21 +206,24 @@ class DocumentUploadView(APIView):
                     ocr_status=ocr_pipeline_status,
                     ocr_accuracy=ocr_accuracy_score,
                     extracted_text=text.strip() if text else "",
+                    # If processing through account credit tokens, leave Razorpay tracking strings empty
                     razorpay_order_id=rzp_order_id if rzp_order_id else "",
                     razorpay_payment_id=rzp_payment_id if rzp_payment_id else "",
                     payment_verified=True
                 )
 
-            Payment.objects.create(
-                        user=user,
-                        plan_type='PAY_AS_YOU_VERIFY',
-                        amount=49.00,
-                        status='SUCCESS',
-                        razorpay_order_id=rzp_order_id,
-                        razorpay_payment_id=rzp_payment_id,
-                        razorpay_signature=rzp_signature,
-                        document=document  # Mapped directly to the newly parsed document record
-                    )
+            if not use_credit:
+                Payment.objects.create(
+                    user=request.user,
+                    plan_type='PAY_AS_YOU_VERIFY',
+                    amount=49.00,
+                    status='SUCCESS',
+                    razorpay_order_id=rzp_order_id,
+                    razorpay_payment_id=rzp_payment_id,
+                    razorpay_signature=rzp_signature,
+                    document=document
+                )    
+        
             logger.info(f"🎉 File {original_filename} successfully saved and marked as PROCESSED in database.")
 
             return Response(
@@ -764,3 +769,30 @@ class LogPaymentFailureView(APIView):
             }
         )
         return Response({"status": "Failure log captured"}, status=status.HTTP_201_CREATED)
+    
+
+
+
+
+class PaymentDetailRetrieveView(RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, id, *args, **kwargs):
+        try:
+            # Look up payment record belonging specifically to the logged in user
+            payment = Payment.objects.select_related('document').get(id=id, user=request.user)
+            
+            return Response({
+                "id": payment.id,
+                "plan_type": payment.plan_type,
+                "amount": float(payment.amount),
+                "currency": payment.currency,
+                "status": payment.status,
+                "razorpay_order_id": payment.razorpay_order_id,
+                "razorpay_payment_id": payment.razorpay_payment_id,
+                "created_at": payment.created_at.strftime("%B %d, %Y at %I:%M %p"),
+                "filename": payment.document.filename if payment.document else "Subscription Plan Enrollment Plan"
+            }, status=status.HTTP_200_OK)
+            
+        except Payment.DoesNotExist:
+            return Response({"detail": "Transaction matching specified lookup parameters was not found."}, status=status.HTTP_404_NOT_FOUND)

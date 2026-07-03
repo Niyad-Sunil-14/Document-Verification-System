@@ -19,6 +19,7 @@ import AdminDocumentDetails from './components/pages/admin/AdminDocumentDetails'
 import Notification from './components/pages/user/Notification';
 import Pricing from './components/pages/user/Pricing';
 import PaymentHistory from './components/pages/user/PaymentHistory';
+import PaymentDetails from './components/pages/user/PaymentDetails';
 
 function App() {
   return (
@@ -110,6 +111,13 @@ function App() {
                 <PaymentHistory/>
               </ProtectedRoute>
             }            
+          />
+
+          <Route path="/payments/:id" element={
+              <ProtectedRoute allowedRoles={['USER']}>
+                <PaymentDetails />
+              </ProtectedRoute>
+            } 
           />
 
         </Routes>

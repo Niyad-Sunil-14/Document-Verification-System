@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import axiosInstance from '../../../api/Axiosinstance';
 import Navbar from './Navbar';
+import { Link, useNavigate } from 'react-router';
 
 export default function PaymentHistory() {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const navigate = useNavigate()
 
   useEffect(() => {
     const fetchPaymentRecords = async () => {
@@ -37,7 +39,7 @@ export default function PaymentHistory() {
         return type.replace(/_/g, ' ');
     }
   };
-  
+
   return (
     <>
         <Navbar/>
@@ -89,15 +91,20 @@ export default function PaymentHistory() {
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-sm">
                         {payments.map((item) => (
-                            <tr key={item.id} className="hover:bg-slate-50/50 transition">
+                            <tr 
+                            key={item.id} 
+                            onClick={() => navigate(`/payments/${item.id}`)}
+                            className="hover:bg-slate-50 transition cursor-pointer group"
+                            >
                             
                             {/* Account Transaction Details */}
                             <td className="px-6 py-4">
-                                <p className="font-semibold text-slate-800 max-w-[200px] truncate" title={item.filename}>
-                                {item.filename}
+                                {/* We keep the inner text highlighted on hover via the parent group configuration */}
+                                <p className="font-semibold text-slate-800 max-w-[200px] truncate group-hover:text-violet-600 transition" title={item.filename}>
+                                    {item.filename}
                                 </p>
                                 <p className="text-xs text-violet-600 mt-0.5 uppercase tracking-tight font-bold">
-                                {formatPlanType(item.plan_type)}
+                                    {formatPlanType(item.plan_type)}
                                 </p>
                             </td>
 
@@ -121,18 +128,18 @@ export default function PaymentHistory() {
                                 ₹{item.amount.toFixed(2)}
                             </td>
 
-                            {/* 🔥 DYNAMIC STATUS BADGE CONDITIONAL BLOCK */}
+                            {/* DYNAMIC STATUS BADGE CONDITIONAL BLOCK */}
                             <td className="px-6 py-4">
                                 {item.status === 'SUCCESS' ? (
-                                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-green-50 text-green-700 border border-green-200/60">
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-green-50 text-green-700 border border-green-200/60">
                                     <span className="h-1.5 w-1.5 rounded-full bg-green-500 mr-1.5" />
                                     Success
-                                  </span>
+                                </span>
                                 ) : (
-                                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200/60">
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200/60">
                                     <span className="h-1.5 w-1.5 rounded-full bg-rose-500 mr-1.5" />
                                     Failed
-                                  </span>
+                                </span>
                                 )}
                             </td>
 
@@ -144,7 +151,7 @@ export default function PaymentHistory() {
                     
                     {/* Footer metrics tag counter */}
                     <div className="bg-slate-50/50 px-6 py-3.5 border-t border-slate-100 text-right text-xs text-gray-400 font-semibold">
-                    Total Invoiced Ledger Operations: {payments.length}
+                    &nbsp;
                     </div>
                 </div>
                 )}

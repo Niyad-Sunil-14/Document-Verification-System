@@ -145,7 +145,7 @@ class Payment(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     
     # Razorpay Transaction Identifiers
-    razorpay_order_id = models.CharField(max_length=255, unique=True)
+    razorpay_order_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     razorpay_payment_id = models.CharField(max_length=255, blank=True, null=True)
     razorpay_signature = models.CharField(max_length=555, blank=True, null=True)
     
