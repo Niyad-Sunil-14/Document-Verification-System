@@ -46,22 +46,56 @@ export default function NotificationsPage() {
     }
   };
 
-  // Dynamic Icon Generator based on text/type matching
+  // Dynamic Icon Generator optimized for both Document Statuses and Payment Statuses
   const renderNotificationIcon = (title) => {
-    const isApproved = title.toLowerCase().includes('approved') || title.toLowerCase().includes('success');
-    const isRejected = title.toLowerCase().includes('rejected') || title.toLowerCase().includes('fail');
+    if (!title) return null;
+    
+    const titleLower = title.toLowerCase().trim();
 
-    if (isApproved) {
+    // --- 1. PAYMENT NOTIFICATION GROUPS ---
+    const isPaymentSuccess = titleLower.includes('subscription activated') || titleLower.includes('payment success');
+    const isPaymentFailed = titleLower.includes('payment failed') || titleLower.includes('cancelled') || titleLower.includes('declined');
+
+    // --- 2. DOCUMENT COMPLIANCE GROUPS ---
+    const isDocApproved = titleLower.includes('approved') && !isPaymentSuccess;
+    const isDocRejected = titleLower.includes('rejected') && !isPaymentFailed;
+    const isReuploaded = titleLower.includes('re-uploaded');
+
+    // 🟢 OPTION A: Payment Success Icon (Credit Card Check)
+    if (isPaymentSuccess) {
       return (
-        <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+        <div className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-700 flex items-center justify-center flex-shrink-0 shadow-xs">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
           </svg>
         </div>
       );
     }
 
-    if (isRejected) {
+    // 🔴 OPTION B: Payment Failure Icon (Credit Card Warning Alert)
+    if (isPaymentFailed) {
+      return (
+        <div className="w-10 h-10 rounded-xl bg-rose-100 border border-rose-300 text-rose-700 flex items-center justify-center flex-shrink-0 shadow-xs">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+        </div>
+      );
+    }
+
+    // 🟢 OPTION C: Document Approved Icon (Success Verification Shield)
+    if (isDocApproved) {
+      return (
+        <div className="w-10 h-10 rounded-xl bg-green-50 border border-green-200 text-green-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+        </div>
+      );
+    }
+
+    // 🔴 OPTION D: Document Rejected Icon (Validation Standard Cross)
+    if (isDocRejected) {
       return (
         <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center flex-shrink-0 shadow-sm">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -71,6 +105,18 @@ export default function NotificationsPage() {
       );
     }
 
+    // 🔄 OPTION E: Document Re-uploaded Icon (The rotation tracking loop)
+    if (isReuploaded) {
+      return (
+        <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 flex items-center justify-center flex-shrink-0 shadow-xs">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
+        </div>
+      );
+    }
+
+    // 🟣 DEFAULT: Generic message notification bubble fallback
     return (
       <div className="w-10 h-10 rounded-xl bg-violet-50 border border-violet-200 text-violet-600 flex items-center justify-center flex-shrink-0 shadow-sm">
         <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -96,7 +142,7 @@ export default function NotificationsPage() {
   // Automatically routes users to the proper viewing interface target route mapping
   const handleCardRedirection = (documentId) => {
     if (!documentId) return;
-      navigate(`/documents/${documentId}`);    
+    navigate(`/documents/${documentId}`);    
   };
 
   return (
@@ -127,7 +173,8 @@ export default function NotificationsPage() {
           <div className="space-y-4">
             {notifications.map((notif) => {
               const { mainDescription, adminRemarks } = parseDescriptionAndRemarks(notif.description);
-              const isRejected = notif.title.toLowerCase().includes('rejected') || notif.title.toLowerCase().includes('fail');
+              const titleLower = notif.title.toLowerCase();
+              const isRejected = titleLower.includes('rejected') || titleLower.includes('fail') || titleLower.includes('failure') || titleLower.includes('dropped') || titleLower.includes('declined');
 
               return (
                 <div 
@@ -172,7 +219,6 @@ export default function NotificationsPage() {
                         {notif.created_at_human}
                       </p>
 
-                      {/* 🔥 NEW ACTION ELEMENT: Button wrapper mapping explicitly to layout redirections */}
                       {notif.document_id && (
                         <button
                           onClick={() => handleCardRedirection(notif.document_id)}

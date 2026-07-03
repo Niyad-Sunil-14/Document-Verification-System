@@ -758,17 +758,29 @@ class LogPaymentFailureView(APIView):
         if not order_id:
             return Response({"detail": "Missing order reference mapping."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Log or update a tracking line item marking the transaction attempt as FAILED
-        Payment.objects.update_or_create(
-            razorpay_order_id=order_id,
-            defaults={
-                "user": request.user,
-                "plan_type": plan_type,
-                "amount": 49.00 if plan_type == 'PAY_AS_YOU_VERIFY' else (99.00 if plan_type == 'STARTER_PACK' else 299.00),
-                "status": 'FAILED'
-            }
-        )
-        return Response({"status": "Failure log captured"}, status=status.HTTP_201_CREATED)
+        # Run both DB mutations safely inside an atomic transaction block
+        with transaction.atomic():
+            # 1. Update or create the Payment record tracking line item as FAILED
+            payment, created = Payment.objects.update_or_create(
+                razorpay_order_id=order_id,
+                defaults={
+                    "user": request.user,
+                    "plan_type": plan_type,
+                    "amount": 49.00 if plan_type == 'PAY_AS_YOU_VERIFY' else (99.00 if plan_type == 'STARTER_PACK' else 299.00),
+                    "status": 'FAILED'
+                }
+            )
+
+            # 🚀 2. FIX: Automatically spawn a Notification ledger item so React can fetch it
+            # The title matches your lowercased '.includes("payment failed")' frontend code loop perfectly.
+            Notification.objects.create(
+                user=request.user,
+                title="❌ Payment Failed",
+                description=f"Your checkout run for the {plan_type.replace('_', ' ')} allocation tier was dropped or unsuccessful. No credits were deducted.",
+                is_read=False
+            )
+
+        return Response({"status": "Failure log and alert notification captured"}, status=status.HTTP_201_CREATED)
     
 
 
@@ -791,7 +803,8 @@ class PaymentDetailRetrieveView(RetrieveAPIView):
                 "razorpay_order_id": payment.razorpay_order_id,
                 "razorpay_payment_id": payment.razorpay_payment_id,
                 "created_at": payment.created_at.strftime("%B %d, %Y at %I:%M %p"),
-                "filename": payment.document.filename if payment.document else "Subscription Plan Enrollment Plan"
+                "document_id": payment.document.id if payment.document else None,
+                "filename": payment.document.filename if payment.document else "Subscription Plan"
             }, status=status.HTTP_200_OK)
             
         except Payment.DoesNotExist:

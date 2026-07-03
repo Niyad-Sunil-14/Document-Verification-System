@@ -30,9 +30,9 @@ export default function PaymentDetails() {
 
   const formatPlanType = (type) => {
     switch (type) {
-      case 'STARTER_PACK': return 'Starter Pack Subscription';
+      case 'STARTER_PACK': return 'Starter Pack';
       case 'MONTHLY_PREMIUM': return 'Monthly Premium Pass';
-      case 'PAY_AS_YOU_VERIFY': return 'Pay-As-You-Verify Direct';
+      case 'PAY_AS_YOU_VERIFY': return 'Pay As You Verify';
       default: return type ? type.replace(/_/g, ' ') : 'Verification Route';
     }
   };
@@ -92,7 +92,7 @@ export default function PaymentDetails() {
                 {isSuccess ? (
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-extrabold bg-green-50 text-green-700 border border-green-200">
                     <span className="h-1.5 w-1.5 rounded-full bg-green-500 mr-1.5" />
-                    Transaction Settled
+                    Payment Successful
                   </span>
                 ) : (
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-extrabold bg-rose-50 text-rose-700 border border-rose-200">
@@ -111,7 +111,7 @@ export default function PaymentDetails() {
             <div className="p-6 sm:p-8 space-y-6">
               
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Gateway Verification Signatures</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Verification ID's</h3>
                 <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/60 font-mono text-xs text-slate-600 space-y-2.5">
                   <div className="flex flex-col sm:flex-row justify-between gap-1 sm:gap-4 pb-2 border-b border-slate-200/40">
                     <span className="text-gray-400 font-semibold font-sans">Razorpay Order ID:</span>
@@ -127,20 +127,64 @@ export default function PaymentDetails() {
               <hr className="border-slate-100" />
 
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Linked Asset Properties</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
+                  Transaction Overview
+                </h3>
+                
+                {/* The grid remains 2 columns wide on desktop layouts */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  
+                  {/* 📦 Credit / File Info Box (Always visible now) */}
                   <div className="border border-slate-100 rounded-xl p-4 bg-white shadow-2xs">
-                    <p className="text-xs text-gray-400 font-semibold">Allocated File Context</p>
-                    <p className="text-sm font-bold text-slate-800 mt-1 truncate" title={payment.filename}>
-                      {payment.filename}
-                    </p>
+                    {payment.status === 'FAILED' ? (
+                      /* ❌ FAILED PAYMENT STATE */
+                      <div>
+                        <p className="text-xs text-gray-400 font-semibold">Credits Provided</p>
+                        <p className="text-sm font-bold text-rose-600 mt-1 flex items-center gap-1.5">
+                          0 credits added
+                        </p>
+                      </div>
+                    ) : payment.plan_type === 'PAY_AS_YOU_VERIFY' ? (
+                      /* 📄 SUCCESSFUL DIRECT DOCUMENT PATH (CLICKABLE ROW TO FILE) */
+                      payment.document_id ? (
+                        <Link 
+                          to={`/documents/${payment.document_id}`} 
+                          className="block hover:bg-slate-50/80 p-1 rounded-lg transition group/file"
+                        >
+                          <p className="text-xs text-gray-400 font-semibold flex items-center gap-1 group-hover/file:text-violet-600 transition">
+                            Allocated File Name
+                          </p>
+                          <p className="text-sm font-bold text-slate-800 mt-1 truncate group-hover/file:text-violet-600 group-hover/file:underline transition" title={payment.filename}>
+                            {payment.filename}
+                          </p>
+                        </Link>
+                      ) : (
+                        <div>
+                          <p className="text-xs text-gray-400 font-semibold">Allocated File Name</p>
+                          <p className="text-sm font-bold text-slate-800 mt-1 truncate" title={payment.filename}>
+                            {payment.filename}
+                          </p>
+                        </div>
+                      )
+                    ) : (
+                      /* 🎫 SUCCESSFUL SUBSCRIPTION PACK PATH */
+                      <div>
+                        <p className="text-xs text-gray-400 font-semibold">Credits Provided</p>
+                        <p className="text-sm font-bold text-green-600 mt-1 flex items-center gap-1.5">
+                          {payment.plan_type === 'STARTER_PACK' ? '+3 credits added' : '+12 credits added'}
+                        </p>
+                      </div>
+                    )}
                   </div>
+
+                  {/* ⏰ Date & Time Card */}
                   <div className="border border-slate-100 rounded-xl p-4 bg-white shadow-2xs">
-                    <p className="text-xs text-gray-400 font-semibold">Timestamp Logs</p>
+                    <p className="text-xs text-gray-400 font-semibold">Date & Time</p>
                     <p className="text-sm font-bold text-slate-700 mt-1">
                       {payment.created_at}
                     </p>
                   </div>
+                  
                 </div>
               </div>
 
@@ -149,11 +193,6 @@ export default function PaymentDetails() {
             {/* Footer context message panel */}
             <div className="bg-slate-50/70 border-t border-slate-100 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-semibold text-gray-400">
               <span>Currency standard: {payment.currency}</span>
-              {!isSuccess && (
-                <span className="text-rose-600 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-100">
-                  ⚠️ Validation dropped due to payment failure.
-                </span>
-              )}
             </div>
 
           </div>
