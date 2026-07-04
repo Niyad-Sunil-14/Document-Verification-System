@@ -280,18 +280,26 @@ class DocumentStandardPagination(PageNumberPagination):
 class DocumentListView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = DocumentListSerializer
-    pagination_class = DocumentStandardPagination
 
     def get(self, request, *args, **kwargs):
         # 1. Base Queryset Filter by Role Access
         if request.user.is_staff:
             queryset = Document.objects.all()
+            ITEMS_PER_PAGE = 10  # 💻 Admin side keeps 10 rows per page
         else:
             queryset = Document.objects.filter(user=request.user)
+            ITEMS_PER_PAGE = 12  # 🚀 User side gets exactly 12 documents per page!
 
-        # 2. Extract Query Parameters from Front-End
+        # 2. Extract Query Parameters
         status_filter = request.query_params.get('status', 'ALL')
         search_term = request.query_params.get('search', '').strip()
+        
+        try:
+            page_num = int(request.query_params.get('page', 1))
+            if page_num < 1:
+                page_num = 1
+        except (ValueError, TypeError):
+            page_num = 1
 
         # 3. Apply Filters to the Queryset
         if status_filter != 'ALL':
@@ -299,33 +307,34 @@ class DocumentListView(APIView):
 
         if search_term:
             queryset = queryset.filter(
-                Q(user__username__icontains=search_term) |
+                Q(user__email__icontains=search_term) |
                 Q(user__fullname__icontains=search_term) |
                 Q(document_type__icontains=search_term) |
-                Q(id__icontains=search_term)
+                Q(filename__icontains=search_term)
             )
 
-        # Order by newest uploads globally
+        # Order by newest uploads
         queryset = queryset.order_by('-uploaded_at')
 
-        # 4. 🔥 ROLE-BASED PAGINATION ROUTING
-        # If it is NOT a staff member (i.e., your standard user client), BYPASS pagination entirely
-        if not request.user.is_staff:
-            serializer = self.serializer_class(queryset, many=True)
-            # Returns a simple flat list array [] directly to the client dashboard
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        # 4. Calculate Dynamic Slicing
+        total_count = queryset.count()
+        start_index = (page_num - 1) * ITEMS_PER_PAGE
+        end_index = start_index + ITEMS_PER_PAGE
 
-        # --- ADMIN ONLY PAGINATION LOGIC ---
-        paginator = self.pagination_class()
-        page = paginator.paginate_queryset(queryset, request, view=self)
-        
-        if page is not None:
-            serializer = self.serializer_class(page, many=True)
-            return paginator.get_paginated_response(serializer.data)
+        paginated_queryset = queryset[start_index:end_index]
 
-        serializer = self.serializer_class(queryset, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        has_next = end_index < total_count
+        has_previous = page_num > 1
 
+        serializer = self.serializer_class(paginated_queryset, many=True)
+
+        return Response({
+            "count": total_count,
+            "next": has_next,
+            "previous": has_previous,
+            "results": serializer.data
+        }, status=status.HTTP_200_OK)
+    
 
 class DocumentDetailView(APIView):
     permission_classes = [IsAuthenticated]

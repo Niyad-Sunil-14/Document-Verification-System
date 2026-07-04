@@ -38,7 +38,7 @@ export default function UserDetails() {
             onClick={() => navigate('/all-users')}
             className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-slate-900 transition mb-6 cursor-pointer"
           >
-            ← Return to User Directory
+            ← Return to All Users
           </button>
 
           {loading ? (

@@ -46,9 +46,9 @@ export default function AllUsers() {
           
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">System User Directory</h1>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">All Users</h1>
             <p className="text-sm text-gray-500 mt-1">
-              Manage accounts, check verification metrics, and view subscription tier configurations across the application platform.
+              Manage accounts, check verification metrics, and view subscription plan configurations across the application.
             </p>
           </div>
 
@@ -76,7 +76,7 @@ export default function AllUsers() {
                       <th className="px-6 py-4">Account Holder</th>
                       <th className="px-6 py-4">Email Address</th>
                       <th className="px-6 py-4">Remaining Credits</th>
-                      <th className="px-6 py-4">Tier Status</th>
+                      <th className="px-6 py-4">Current Plan</th>
                       <th className="px-6 py-4 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -108,7 +108,7 @@ export default function AllUsers() {
                             onClick={() => navigate(`/admin/users/${account.id}`)}
                             className="text-xs font-bold text-violet-600 bg-violet-50 hover:bg-violet-100 px-3 py-1.5 rounded-lg transition cursor-pointer"
                           >
-                            Manage Profile
+                            View Profile
                           </button>
                         </td>
                       </tr>
