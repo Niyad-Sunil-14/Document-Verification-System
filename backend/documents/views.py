@@ -442,8 +442,47 @@ class DocumentDetailView(APIView):
 
             # 🛠️ 3. HANDLE METADATA UPDATE WORKFLOW (Admin approval/rejection edits)
             serializer = DocumentDetailSerializer(document, data=request.data, partial=True, context={'request': request})
+            old_status = document.status
+            
             if serializer.is_valid():
-                serializer.save()
+                # Save updates to the document (status, remarks, etc.)
+                updated_document = serializer.save()
+                
+                # Fetch clean references of the updated data
+                new_status = updated_document.status
+                admin_remarks = updated_document.remarks or ""
+                doc_type_clean = (updated_document.document_type or "Document").replace('_', ' ').title()
+
+                # 🔥 AUTOMATION LAYER: Send custom notifications based on the action taken
+                notification_title = ""
+                notification_desc = ""
+                if old_status != new_status:
+                    # Case A: Admin altered the verification status
+                    if new_status == "APPROVED":
+                        notification_title = f"✅ {doc_type_clean} Approved"
+                        notification_desc = f"Your uploaded {doc_type_clean.lower()} has been verified secure by our compliance team."
+                    elif new_status == "REJECTED":
+                        notification_title = f"❌ {doc_type_clean} Rejected"
+                        notification_desc = f"Your uploaded {doc_type_clean.lower()} failed our clearance checks."
+                    else:
+                        notification_title = f"ℹ️ {doc_type_clean} Status Updated"
+                        notification_desc = f"Your document status has been updated to {new_status}."
+                else:
+                    # Case B: Admin only updated/sent audit remarks notes without changing status
+                    notification_title = f"💬 Audit Notes Appended: {doc_type_clean}"
+                    notification_desc = "An administrator has added review remarks to your document registration profile."
+
+                # If there are remarks, append them neatly to the notification body
+                if admin_remarks:
+                    notification_desc += f" Remarks: \"{admin_remarks}\""
+
+                # Save the new notification targeting the document owner
+                Notification.objects.create(
+                    user=updated_document.user,  # 🔥 Crucial: Routes directly to the user who owns the file
+                    title=notification_title,
+                    description=notification_desc,
+                    is_read=False
+                )
                 return Response(serializer.data, status=status.HTTP_200_OK)
             
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

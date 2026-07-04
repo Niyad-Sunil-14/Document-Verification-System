@@ -20,6 +20,8 @@ import Notification from './components/pages/user/Notification';
 import Pricing from './components/pages/user/Pricing';
 import PaymentHistory from './components/pages/user/PaymentHistory';
 import PaymentDetails from './components/pages/user/PaymentDetails';
+import AllUsers from './components/pages/admin/AllUsers';
+import UserDetails from './components/pages/admin/UserDetails';
 
 function App() {
   return (
@@ -56,6 +58,20 @@ function App() {
           <Route path='/admin/documents/:id' element={
               <ProtectedRoute allowedRoles={['ADMIN']}>
                 <AdminDocumentDetails/>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route path='/all-users' element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AllUsers/>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route path='admin/users/:id' element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <UserDetails/>
               </ProtectedRoute>
             }
           />

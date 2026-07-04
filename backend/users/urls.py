@@ -23,4 +23,8 @@ urlpatterns = [
     path('users/request-email-update/', RequestEmailUpdateView.as_view(), name='request-email-update'),
     path('users/confirm-email-update/', ConfirmEmailUpdateView.as_view(), name='confirm-email-update'),
 
+    #Admin url
+    path('admin/users/', AdminAllUsersView.as_view(), name='admin-all-users'),
+    path('admin/users/<int:id>/', AdminUserDetailsView.as_view(), name='admin-user-details'),
+
 ]

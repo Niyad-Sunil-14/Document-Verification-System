@@ -2,6 +2,7 @@ from rest_framework import serializers
 from . models import CustomUser
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
+from documents.models import Document
 
 class UserProfileSerializer(serializers.ModelSerializer):
     joined_date = serializers.SerializerMethodField()
@@ -106,3 +107,35 @@ class ChangePasswordSerializer(serializers.Serializer):
         return data
     
 
+
+
+
+#Admin Serilizers
+class UserDocumentLogSerializer(serializers.ModelSerializer):
+    """Minimal serializer to show nested document history inside user profile views"""
+    class Meta:
+        model = Document
+        fields = ['id', 'filename', 'document_type', 'status', 'ocr_status', 'ocr_accuracy', 'uploaded_at']
+
+
+class UserAdminSerializer(serializers.ModelSerializer):
+    # 🚀 FIX: We explicitly declare the field here and let it dynamically map via standard model lookup
+    documents = UserDocumentLogSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = CustomUser
+        fields = ['id', 'fullname', 'email', 'document_credits', 'is_subscribed', 'documents']
+
+    def to_representation(self, instance):
+        """
+        🚀 EMERGENCY BACKUP ROUTE: If your model has a tricky related_name setup,
+        this custom loop explicitly catches all records bound to the user id.
+        """
+        representation = super().to_representation(instance)
+        
+        # If 'documents' field is empty or missing, manually query and inject the records
+        if not representation.get('documents'):
+            user_docs = Document.objects.filter(user=instance).order_by('-id')
+            representation['documents'] = UserDocumentLogSerializer(user_docs, many=True).data
+            
+        return representation

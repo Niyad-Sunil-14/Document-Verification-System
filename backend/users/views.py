@@ -7,7 +7,7 @@ from django.core.cache import cache
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny,IsAuthenticated
+from rest_framework.permissions import AllowAny,IsAuthenticated,IsAdminUser
 from rest_framework_simplejwt.tokens import RefreshToken
 from . signals import password_reset_requested
 from django.core.cache import cache
@@ -344,3 +344,38 @@ class ConfirmEmailUpdateView(APIView):
         # Evict cache tokens
         cache.delete(f"email_otp_{user.id}")
         return Response({"detail": "Email records modified securely.", "email": user.email}, status=status.HTTP_200_OK)
+    
+
+
+
+
+#Admin Views
+class AdminAllUsersView(APIView):
+    # Enforces that only system admins/staff can access this directory route
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request, *args, **kwargs):
+        try:
+            # Fetch all users, ordering by newest or by name
+            users = User.objects.all().order_by('-id')
+            serializer = UserAdminSerializer(users, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": f"Failed fetching system user directory: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AdminUserDetailsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request, id, *args, **kwargs):
+        try:
+            # 🚀 OPTIMIZATION: Prefetch the bound documents instantly in one query execution pass
+            user_profile = User.objects.filter(id=id).prefetch_related('documents').first()
+
+            if not user_profile:
+                return Response({"detail": "User profile index not found."}, status=status.HTTP_404_NOT_FOUND)
+            
+            serializer = UserAdminSerializer(user_profile)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": f"Error parsing user profile metrics: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
