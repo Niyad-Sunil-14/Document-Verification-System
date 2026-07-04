@@ -44,6 +44,26 @@ def pil_to_opencv(pil_image):
 
 env = environ.Env()
 
+import os
+import tempfile
+import cv2
+import pytesseract
+from pytesseract import Output
+from pdf2image import convert_from_path
+import cloudinary
+import cloudinary.uploader
+import razorpay
+from django.conf import settings
+from django.db import transaction
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
+from .models import Document, Payment, Notification  # 🚀 Added Notification import
+
+# Keep your logger and pre-processing utility imports/functions here...
+
 class DocumentUploadView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = (MultiPartParser, FormParser)
@@ -66,9 +86,7 @@ class DocumentUploadView(APIView):
         rzp_signature = serializer.validated_data.get('razorpay_signature')
 
         if use_credit:
-            # Atomic database transaction block to prevent multi-tab concurrency bypass bugs
             with transaction.atomic():
-                # Re-fetch user inside transaction lock for real-time balance checking
                 current_user = request.user.__class__.objects.select_for_update().get(id=user.id)
                 
                 if current_user.document_credits <= 0:
@@ -77,12 +95,10 @@ class DocumentUploadView(APIView):
                         status=status.HTTP_402_PAYMENT_REQUIRED
                     )
 
-                # Deduct one token credit line item safely
                 current_user.document_credits -= 1
                 current_user.save()
                 logger.info(f"🪙 1 Account credit token deducted for User ID: {user.id}")
         else:
-            # Fallback to validating cryptographic signatures for direct checkout orders
             if not user.is_subscribed and user.document_credits <= 0:
                 if not all([rzp_order_id, rzp_payment_id, rzp_signature]):
                     return Response(
@@ -90,7 +106,6 @@ class DocumentUploadView(APIView):
                         status=status.HTTP_402_PAYMENT_REQUIRED
                     )
             
-            # If billing data is provided, execute the payment gateway verification handshake
             if all([rzp_order_id, rzp_payment_id, rzp_signature]):
                 try:
                     client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
@@ -206,23 +221,33 @@ class DocumentUploadView(APIView):
                     ocr_status=ocr_pipeline_status,
                     ocr_accuracy=ocr_accuracy_score,
                     extracted_text=text.strip() if text else "",
-                    # If processing through account credit tokens, leave Razorpay tracking strings empty
                     razorpay_order_id=rzp_order_id if rzp_order_id else "",
                     razorpay_payment_id=rzp_payment_id if rzp_payment_id else "",
                     payment_verified=True
                 )
 
-            if not use_credit:
-                Payment.objects.create(
-                    user=request.user,
-                    plan_type='PAY_AS_YOU_VERIFY',
-                    amount=49.00,
-                    status='SUCCESS',
-                    razorpay_order_id=rzp_order_id,
-                    razorpay_payment_id=rzp_payment_id,
-                    razorpay_signature=rzp_signature,
-                    document=document
-                )    
+                if not use_credit:
+                    # 1. Create the payment record entry tracking row
+                    Payment.objects.create(
+                        user=request.user,
+                        plan_type='PAY_AS_YOU_VERIFY',
+                        amount=49.00,
+                        status='SUCCESS',
+                        razorpay_order_id=rzp_order_id,
+                        razorpay_payment_id=rzp_payment_id,
+                        razorpay_signature=rzp_signature,
+                        document=document
+                    )
+                    
+                    # 🚀 2. FIRE SUCCESS NOTIFICATION (Only runs for Pay-As-You-Verify paths)
+                    # The title matching structure maps perfectly to your new credit card layout icon!
+                    Notification.objects.create(
+                        user=request.user,
+                        title="✅ Payment Success",
+                        description=f"Payment received for verifying '{original_filename}'. The document analysis has been started.",
+                        document=document,
+                        is_read=False
+                    )    
         
             logger.info(f"🎉 File {original_filename} successfully saved and marked as PROCESSED in database.")
 
@@ -243,7 +268,7 @@ class DocumentUploadView(APIView):
             return Response(
                 {"error": f"Cloudinary upload failed: {str(upload_error)}"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )    
+            ) 
 
 
 
@@ -775,8 +800,11 @@ class LogPaymentFailureView(APIView):
             # The title matches your lowercased '.includes("payment failed")' frontend code loop perfectly.
             Notification.objects.create(
                 user=request.user,
-                title="❌ Payment Failed",
-                description=f"Your checkout run for the {plan_type.replace('_', ' ')} allocation tier was dropped or unsuccessful. No credits were deducted.",
+                title="⚠️ Payment Failed",
+                description=(
+                        f"Your checkout run for the {plan_type.replace('_', ' ').title()} pass was unsuccessful. "
+                        f"{'No credits were added.' if plan_type != 'PAY_AS_YOU_VERIFY' else 'No charges were made.'}"
+                    ),
                 is_read=False
             )
 

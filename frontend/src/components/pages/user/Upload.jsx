@@ -141,6 +141,9 @@ export default function Upload() {
         name: 'DocVerify System',
         description: `${documentType.replace(/_/g, ' ')} Processing Fee`,
         order_id: order_id,
+        notes: {
+          plan_type: "pay_as_you_verify" 
+        },
         handler: async function (paymentInfo) {
           try {
             setPaymentStage('SUCCESS');
@@ -180,10 +183,18 @@ export default function Upload() {
           color: '#4f46e5', 
         },
         modal: {
-          ondismiss: function () {
+          ondismiss: async function () {
             setIsUploading(false);
             setPaymentStage('IDLE');
             setMessage({ text: '❌ Payment window exited. Document creation suspended.', isError: true });
+            try {
+              await axiosInstance.post('documents/payments/log-failure/', {
+                razorpay_order_id: order_id,
+                plan_type: 'PAY_AS_YOU_VERIFY'
+              });
+            } catch (err) {
+              console.error("Failed to register payment drop on server:", err);
+            }
           }
         }
       };
