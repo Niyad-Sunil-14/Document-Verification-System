@@ -2,7 +2,7 @@ from rest_framework import serializers
 from . models import CustomUser
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
-from documents.models import Document
+from documents.models import Document,Payment
 
 class UserProfileSerializer(serializers.ModelSerializer):
     joined_date = serializers.SerializerMethodField()
@@ -118,13 +118,22 @@ class UserDocumentLogSerializer(serializers.ModelSerializer):
         fields = ['id', 'filename', 'document_type', 'status', 'ocr_status', 'ocr_accuracy', 'uploaded_at']
 
 
+class UserPaymentLogSerializer(serializers.ModelSerializer):
+    """Minimal serializer to show user checkout transaction history"""
+    class Meta:
+        model = Payment
+        # Matches the fields handled in your UserDetails.jsx template
+        fields = ['id', 'razorpay_order_id', 'amount','plan_type', 'status', 'created_at']
+
+
 class UserAdminSerializer(serializers.ModelSerializer):
     # 🚀 FIX: We explicitly declare the field here and let it dynamically map via standard model lookup
     documents = UserDocumentLogSerializer(many=True, read_only=True)
+    payments = UserPaymentLogSerializer(many=True, read_only=True)
 
     class Meta:
         model = CustomUser
-        fields = ['id', 'fullname', 'email', 'document_credits', 'is_subscribed', 'documents']
+        fields = ['id', 'fullname', 'email', 'document_credits', 'is_subscribed', 'documents','payments']
 
     def to_representation(self, instance):
         """
@@ -137,5 +146,10 @@ class UserAdminSerializer(serializers.ModelSerializer):
         if not representation.get('documents'):
             user_docs = Document.objects.filter(user=instance).order_by('-id')
             representation['documents'] = UserDocumentLogSerializer(user_docs, many=True).data
+
+        if not representation.get('payments'):
+            # This directly filters the Payment records using the parent user object model link
+            user_payments = Payment.objects.filter(user=instance).order_by('-created_at')
+            representation['payments'] = UserPaymentLogSerializer(user_payments, many=True).data
             
         return representation

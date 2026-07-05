@@ -9,6 +9,10 @@ export default function UserDetails() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [adminEmail, setAdminEmail] = useState('admin@docverify.io');
+  
+  // Active sub-panel tab toggle selector ('DOCUMENTS' or 'PAYMENTS')
+  const [activeTab, setActiveTab] = useState('DOCUMENTS');
 
   useEffect(() => {
     const fetchUserProfileDetails = async () => {
@@ -16,6 +20,10 @@ export default function UserDetails() {
         setLoading(true);
         const response = await axiosInstance.get(`admin/users/${id}/`);
         setProfile(response.data);
+        const profileResponse = await axiosInstance.get('users/profile/');
+        if (profileResponse.data?.email) {
+          setAdminEmail(profileResponse.data.email);
+        }
       } catch (err) {
         console.error("Profile parsing error:", err);
         setError("Failed to construct profile record indicators. Check route permissions.");
@@ -27,16 +35,34 @@ export default function UserDetails() {
     fetchUserProfileDetails();
   }, [id]);
 
+// 🚀 Fixed Currency Formatter: Takes direct Rupee integers, drops .00 decimals
+  const formatToINR = (amountInRupees) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0 // Keeps it clean as ₹299 or ₹99 without .00
+    }).format(amountInRupees || 0);
+  };
+
+  // 🚀 PLAN TYPE CONVERTER UTIL: Converts 'PREMIUM_TIER' -> 'Premium Tier'
+  const formatPlanType = (plan) => {
+    if (!plan) return "Standard Plan";
+    return plan
+      .replace(/_/g, ' ')
+      .toLowerCase()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
   return (
     <>
-      <AdminNavbar />
+      <AdminNavbar email={adminEmail} />
       <div className="bg-slate-50 min-h-[calc(100vh-4rem)] py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
           
           {/* Back Action Header */}
           <button
             onClick={() => navigate('/all-users')}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-slate-900 transition mb-6 cursor-pointer"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-slate-900 transition mb-6 cursor-pointer bg-transparent border-0 outline-none"
           >
             ← Return to All Users
           </button>
@@ -68,61 +94,144 @@ export default function UserDetails() {
 
                 {/* Tokens display badge metrics */}
                 <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 text-left sm:text-right">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Available Vault Tokens</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Available Tokens</p>
                   <p className="text-xl font-extrabold text-slate-800">{profile.document_credits} Credits</p>
                 </div>
               </div>
 
-              {/* Uploaded Files Matrix Section */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                  <h3 className="font-bold text-slate-800 text-sm">Uploaded Document Ingestion Logs</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">Historical verification tracks processed by this profile entity.</p>
-                </div>
-
-                {!profile.documents || profile.documents.length === 0 ? (
-                  <p className="p-8 text-center text-xs font-medium text-gray-400">No documents uploaded by this user yet.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50/30 border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                          <th className="px-6 py-3">File Title</th>
-                          <th className="px-6 py-3">Category</th>
-                          <th className="px-6 py-3">OCR Confidence</th>
-                          <th className="px-6 py-3 text-right">Pipeline Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 text-xs">
-                        {profile.documents.map((doc) => (
-                          <tr key={doc.id} className="hover:bg-slate-50/60 transition">
-                            <td className="px-6 py-3.5 font-semibold text-slate-800 truncate max-w-[200px]" title={doc.filename}>
-                              {doc.filename}
-                            </td>
-                            <td className="px-6 py-3.5 text-gray-500 font-medium uppercase tracking-tight">
-                              {doc.document_type.replace(/_/g, ' ')}
-                            </td>
-                            <td className="px-6 py-3.5 font-mono font-bold text-slate-600">
-                              {doc.ocr_accuracy ? `${doc.ocr_accuracy}%` : '0.00%'}
-                            </td>
-                            <td className="px-6 py-3.5 text-right">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-bold text-[10px] ${
-                                doc.status === 'APPROVED' 
-                                  ? 'bg-green-50 text-green-700 border border-green-100' 
-                                  : doc.status === 'REJECTED' 
-                                  ? 'bg-red-50 text-red-700 border border-red-100' 
-                                  : 'bg-amber-50 text-amber-700 border border-amber-100'
-                              }`}>
-                                {doc.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+              {/* TAB SELECTION NAVIGATION TRIGGER ROW */}
+              <div className="flex border-b border-slate-200 space-x-6 text-sm font-bold">
+                <button
+                  onClick={() => setActiveTab('DOCUMENTS')}
+                  className={`pb-3 transition-all cursor-pointer bg-transparent border-0 outline-none ${
+                    activeTab === 'DOCUMENTS'
+                      ? 'border-b-2 border-violet-600 text-slate-950'
+                      : 'text-gray-400 hover:text-slate-600'
+                  }`}
+                >
+                  Uploaded Documents
+                </button>
+                <button
+                  onClick={() => setActiveTab('PAYMENTS')}
+                  className={`pb-3 transition-all cursor-pointer bg-transparent border-0 outline-none ${
+                    activeTab === 'PAYMENTS'
+                      ? 'border-b-2 border-violet-600 text-slate-950'
+                      : 'text-gray-400 hover:text-slate-600'
+                  }`}
+                >
+                  Payment History
+                </button>
               </div>
+
+              {/* OPTION 1: DOCUMENTS TABLE BLOCK */}
+              {activeTab === 'DOCUMENTS' && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-fadeIn">
+                  <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                    <h3 className="font-bold text-slate-800 text-sm">User Uploaded Document</h3>
+                    <p className="text-xs text-gray-400 mt-0.5">Complete document processing log and verification history for this user.</p>
+                  </div>
+
+                  {!profile.documents || profile.documents.length === 0 ? (
+                    <p className="p-8 text-center text-xs font-medium text-gray-400">No documents uploaded by this user yet.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50/30 border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                            <th className="px-6 py-3">File Title</th>
+                            <th className="px-6 py-3">Category</th>
+                            <th className="px-6 py-3">OCR Confidence</th>
+                            <th className="px-6 py-3 text-right">Pipeline Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-xs">
+                          {profile.documents.map((doc) => (
+                            <tr key={doc.id} className="hover:bg-slate-50/60 transition">
+                              <td className="px-6 py-3.5 font-semibold text-slate-800 truncate max-w-[200px]" title={doc.filename}>
+                                {doc.filename}
+                              </td>
+                              <td className="px-6 py-3.5 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
+                                {(doc.document_type || 'GENERAL').replace(/_/g, ' ')}
+                              </td>
+                              <td className="px-6 py-3.5 font-mono font-bold text-slate-600">
+                                {doc.ocr_accuracy ? `${doc.ocr_accuracy}%` : '0.00%'}
+                              </td>
+                              <td className="px-6 py-3.5 text-right">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-bold text-[10px] ${
+                                  doc.status === 'APPROVED'
+                                    ? 'bg-green-50 text-green-700 border border-green-100'
+                                    : doc.status === 'REJECTED'
+                                    ? 'bg-red-50 text-red-700 border border-red-100'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-100'
+                                }`}>
+                                  {doc.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* OPTION 2: PAYMENTS HISTORY TABLE BLOCK */}
+              {activeTab === 'PAYMENTS' && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-fadeIn">
+                  <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                    <h3 className="font-bold text-slate-800 text-sm">User Payment History</h3>
+                    <p className="text-xs text-gray-400 mt-0.5">Complete billing history including all successful purchases and failed payment attempts.</p>
+                  </div>
+
+                  {!profile.payments || profile.payments.length === 0 ? (
+                    <p className="p-8 text-center text-xs font-medium text-gray-400">No payment transaction records linked to this profile.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50/30 border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                            <th className="px-6 py-3">Reference ID</th>
+                            <th className="px-6 py-3">Amount</th>
+                            <th className="px-6 py-3">Plan Type</th>
+                            <th className="px-6 py-3">Timestamp</th>
+                            <th className="px-6 py-3 text-right">Attempt Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-xs font-medium">
+                          {profile.payments.map((pay) => (
+                            <tr key={pay.id} className="hover:bg-slate-50/60 transition">
+                              <td className="px-6 py-3.5 font-mono text-slate-500 text-[11px]">
+                                #{pay.razorpay_order_id || pay.id}
+                              </td>
+                              {/* 🚀 Rupee formatted output rendering column */}
+                              <td className="px-6 py-3.5 font-extrabold text-slate-900 text-sm">
+                                {formatToINR(pay.amount)}
+                              </td>
+                              {/* 🚀 Capitalized human readable string text layout mapping */}
+                              <td className="px-6 py-3.5 font-semibold text-slate-700">
+                                {formatPlanType(pay.plan_type)}
+                              </td>
+                              <td className="px-6 py-3.5 text-gray-400 font-normal">
+                                {pay.created_at ? new Date(pay.created_at).toLocaleString() : 'Recent'}
+                              </td>
+                              <td className="px-6 py-3.5 text-right">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md font-bold text-[10px] uppercase border ${
+                                  pay.status === 'SUCCESS' || pay.status === 'COMPLETED'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                    : 'bg-rose-50 text-rose-700 border-rose-100'
+                                }`}>
+                                  {pay.status === 'SUCCESS' || pay.status === 'COMPLETED' ? 'Success' : 'Failed'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
 
             </div>
           )}

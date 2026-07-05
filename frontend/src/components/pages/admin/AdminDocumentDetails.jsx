@@ -16,6 +16,10 @@ export default function AdminDocumentDetails() {
   const [adminEmail, setAdminEmail] = useState('admin@docverify.io');
   const [remarks, setRemarks] = useState('');
 
+  // 🚀 CUSTOM MODAL CONFIRMATION STATES
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState(null);
+
   // 2. DATA SYNCHRONIZATION HOOK
   useEffect(() => {
     const fetchAdminDetails = async () => {
@@ -43,35 +47,30 @@ export default function AdminDocumentDetails() {
     if (id) fetchAdminDetails();
   }, [id]);
 
+  // Opens the confirmation drawer
+  const triggerStatusConfirmation = (statusType) => {
+    setPendingStatus(statusType);
+    setIsModalOpen(true);
+  };
+
   // 3. SECURE COMPLIANCE UPDATE ACTION MATRIX CALLS
-  const handleUpdateStatus = async (newStatus) => {
+  const handleConfirmStatusUpdate = async () => {
+    if (!pendingStatus) return;
+    setIsModalOpen(false);
+    
     try {
       setActionLoading(true);
       const response = await axiosInstance.patch(`documents/detail/${id}/`, { 
-        status: newStatus,
+        status: pendingStatus,
         remarks: remarks 
       });
       setDocument(response.data);
-      alert(`Document successfully marked as ${newStatus}!`);
     } catch (err) {
       console.error("Failed to commit verification status adjustment:", err);
-      alert('Database reject exception: Lacks permissions or incorrect endpoint layout.');
+      setError('Database reject exception: Lacks permissions or incorrect endpoint layout.');
     } finally {
       setActionLoading(false);
-    }
-  };
-
-  const handleSaveRemarksOnly = async () => {
-    try {
-      setActionLoading(true);
-      const response = await axiosInstance.patch(`documents/detail/${id}/`, { remarks: remarks });
-      setDocument(response.data);
-      alert('Review remarks updated successfully.');
-    } catch (err) {
-      console.error("Failed to commit remarks update:", err);
-      alert('Failed to save remarks context.');
-    } finally {
-      setActionLoading(false);
+      setPendingStatus(null);
     }
   };
 
@@ -103,7 +102,7 @@ export default function AdminDocumentDetails() {
   const isPdf = fileUrl.toLowerCase().includes('.pdf');
 
   return (
-    <div className="min-h-screen bg-slate-50/50 text-slate-900 font-sans antialiased">
+    <div className="min-h-screen bg-slate-50/50 text-slate-900 font-sans antialiased relative">
       <AdminNavbar email={adminEmail} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -234,7 +233,7 @@ export default function AdminDocumentDetails() {
                 <div className="space-y-2 pt-2">
                   <button 
                     disabled={actionLoading || document?.status === 'APPROVED'}
-                    onClick={() => handleUpdateStatus('APPROVED')}
+                    onClick={() => triggerStatusConfirmation('APPROVED')} // 🚀 Modal Confirmation Trigger
                     className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl shadow transition duration-100 cursor-pointer"
                   >
                     {actionLoading ? 'Processing...' : 'Verify & Approve Document'}
@@ -242,20 +241,22 @@ export default function AdminDocumentDetails() {
 
                   <button 
                     disabled={actionLoading || document?.status === 'REJECTED'}
-                    onClick={() => handleUpdateStatus('REJECTED')}
+                    onClick={() => triggerStatusConfirmation('REJECTED')} // 🚀 Modal Confirmation Trigger
                     className="w-full py-2.5 bg-white hover:bg-rose-50 border border-rose-200 text-rose-700 disabled:opacity-40 text-xs font-bold rounded-xl transition duration-100 cursor-pointer"
                   >
-                    {actionLoading ? 'Processing...' : 'Reject & Sent Remarks'}
+                    {actionLoading ? 'Processing...' : 'Reject & Send Remarks'}
                   </button>
 
                 </div>
               </div>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Compliance Guide</h4>
+            {/* 🚀 COMPLIANCE GUIDE OVERHAUL PANEL */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 text-white shadow-xl">
+              <h4 className="text-xs font-black text-violet-400 uppercase tracking-widest mb-2">Audit Compliance Guide</h4>
               <p className="text-[11px] text-slate-300 leading-relaxed font-medium">
-                Submitting remarks without changing a status allows for active note taking during auditing stages. Verify characters before approval.
+                Review extracted data pools against file originals before making a compliance evaluation. 
+                Saving remarks independently allows notes to be captured during ongoing auditing phases without changing active system permissions.
               </p>
             </div>
           </div>
@@ -263,6 +264,42 @@ export default function AdminDocumentDetails() {
         </div>
 
       </main>
+
+      {/* 🚀 TAILWIND MODAL DIALOG COMPONENT PANEL */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl border border-slate-100 p-6 max-w-sm w-full shadow-2xl space-y-4">
+            <div className="flex items-center space-x-3 text-amber-500">
+              <span className="text-2xl">⚠️</span>
+              <h3 className="text-base font-extrabold text-slate-900">Confirm Verification Status</h3>
+            </div>
+            
+            <p className="text-xs text-gray-500 font-medium leading-relaxed">
+              Are you sure you want to change this document's status to{' '}
+              <span className={`font-bold uppercase ${pendingStatus === 'APPROVED' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {pendingStatus}
+              </span>?
+            </p>
+
+            <div className="flex space-x-3 pt-2 text-xs font-bold">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition cursor-pointer outline-none border-0"
+              >
+                No, Cancel
+              </button>
+              <button
+                onClick={handleConfirmStatusUpdate}
+                className={`flex-1 py-2.5 text-white rounded-xl shadow transition cursor-pointer outline-none border-0 ${
+                  pendingStatus === 'APPROVED' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
+                }`}
+              >
+                Yes, Update
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

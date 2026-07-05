@@ -81,7 +81,7 @@ export default function AdminDashboard() {
               <span>🛡️ Admin Dashboard</span>
             </div>
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Overall Logs</h1>
-            <p className="text-gray-500 mt-1">Track all registered users, uploaded documents, and active text extraction logs.</p>
+            <p className="text-gray-500 mt-1">Centralized overview of active system users, uploaded documents, and automated text analysis logs.</p>
           </div>
         </div>
 
