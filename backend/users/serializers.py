@@ -58,10 +58,8 @@ class AdminTokenObtainSerializer(TokenObtainPairSerializer):
 # 1. CUSTOM SERIALIZERS (Where role inspection happens)
 class StrictUserTokenSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
-        # Let SimpleJWT authenticate the credentials first
         data = super().validate(attrs)
         
-        # 🔥 CLIENT GATEKEEPER: If user is staff or superuser, block them from this endpoint!
         if self.user.is_staff or self.user.is_superuser:
             raise AuthenticationFailed(
                 "Access Denied: Administrators are restricted from logging into the Client Portal.",
@@ -91,16 +89,13 @@ class ChangePasswordSerializer(serializers.Serializer):
     new_password = serializers.CharField(required=True, write_only=True)
 
     def validate_old_password(self, value):
-        # Grab the logged-in user instance passed from the view context
         user = self.context['request'].user
         
-        # Verify if the input matches their active password hash
         if not user.check_password(value):
             raise serializers.ValidationError("Your current password parameter is incorrect.")
         return value
 
     def validate(self, data):
-        # Prevent the user from re-submitting their old password as the new password
         if data['old_password'] == data['new_password']:
             raise serializers.ValidationError({"new_password": "New password cannot match your current cipher."})
         
@@ -122,12 +117,10 @@ class UserPaymentLogSerializer(serializers.ModelSerializer):
     """Minimal serializer to show user checkout transaction history"""
     class Meta:
         model = Payment
-        # Matches the fields handled in your UserDetails.jsx template
         fields = ['id', 'razorpay_order_id', 'amount','plan_type', 'status', 'created_at']
 
 
 class UserAdminSerializer(serializers.ModelSerializer):
-    # 🚀 FIX: We explicitly declare the field here and let it dynamically map via standard model lookup
     documents = UserDocumentLogSerializer(many=True, read_only=True)
     payments = UserPaymentLogSerializer(many=True, read_only=True)
 
@@ -142,13 +135,11 @@ class UserAdminSerializer(serializers.ModelSerializer):
         """
         representation = super().to_representation(instance)
         
-        # If 'documents' field is empty or missing, manually query and inject the records
         if not representation.get('documents'):
             user_docs = Document.objects.filter(user=instance).order_by('-id')
             representation['documents'] = UserDocumentLogSerializer(user_docs, many=True).data
 
         if not representation.get('payments'):
-            # This directly filters the Payment records using the parent user object model link
             user_payments = Payment.objects.filter(user=instance).order_by('-created_at')
             representation['payments'] = UserPaymentLogSerializer(user_payments, many=True).data
             

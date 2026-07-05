@@ -203,7 +203,6 @@ class LogoutView(APIView):
 
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
-    # 🔥 FIX 1: Ensure view handles both multipart image payloads and raw JSON updates
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get(self, request):
@@ -213,23 +212,19 @@ class UserProfileView(APIView):
     def patch(self, request):
         user = request.user
         
-        # 🔥 FIX 2: Check for incoming avatar file upgrades explicitly
         if 'profile_picture' in request.FILES:
             try:
                 uploaded_file = request.FILES['profile_picture']
                 
-                # Push the binary image stream directly to Cloudinary
                 upload_result = cloudinary.uploader.upload(
                     uploaded_file,
                     folder="user_profiles/",
                     resource_type="image"
                 )
                 
-                # Save the secure URL string inside the user instance field
                 user.profile_picture = upload_result.get("secure_url")
                 user.save()
                 
-                # Return the updated instance via your serializer immediately
                 serializer = UserProfileSerializer(user)
                 return Response(serializer.data, status=status.HTTP_200_OK)
                 
@@ -239,7 +234,6 @@ class UserProfileView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
 
-        # Fallback processing loop for normal text profile changes (like changing fullnames)
         serializer = UserProfileSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -247,7 +241,6 @@ class UserProfileView(APIView):
             
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    # If you are targeting PUT requests from React form submissions, mirror the logic:
     def put(self, request):
         return self.patch(request)
     
@@ -281,38 +274,32 @@ class RequestEmailUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # 1. Extract and sanitize incoming email payload strings
         raw_email = request.data.get('email', '')
         if not raw_email:
             return Response({"detail": "New email parameter required."}, status=status.HTTP_400_BAD_REQUEST)
             
         new_email = raw_email.strip().lower()
 
-        # 2. DEFENSIVE CHECK: Prevent users from resetting to their current email
         if new_email == request.user.email.lower():
             return Response(
                 {"detail": "This is already your registered email address."}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 3. UNIQUENESS CHECK: Ensure the email does not exist anywhere else in the DB
         if User.objects.filter(email__iexact=new_email).exists():
             return Response(
                 {"detail": "This email address is already in use by another account."}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
             
-        # 4. GENERATION: Compile the 6-digit confirmation string token
         verification_code = f"{random.randint(100000, 999999)}"
         
-        # 5. CACHE BUFFER: Store email + token mapping tied to user ID session context for 10 min
         cache.set(
             f"email_otp_{request.user.id}", 
             {"email": new_email, "code": verification_code}, 
             timeout=600
         )
         
-        # 6. DISPATCH: Fire transactional security email directly to target address
         send_mail(
             subject="DocVerify Security Center: Confirm Your New Email Address",
             message=f"Your confirmation token is: {verification_code}. It will expire in 10 minutes.",
@@ -336,12 +323,10 @@ class ConfirmEmailUpdateView(APIView):
         if not cached_data or cached_data["code"] != code_submitted:
             return Response({"detail": "Invalid or expired authorization code parameters."}, status=status.HTTP_400_BAD_REQUEST)
             
-        # Code matches, update user instances safely
         user = request.user
         user.email = cached_data["email"]
         user.save()
         
-        # Evict cache tokens
         cache.delete(f"email_otp_{user.id}")
         return Response({"detail": "Email records modified securely.", "email": user.email}, status=status.HTTP_200_OK)
     
@@ -351,12 +336,10 @@ class ConfirmEmailUpdateView(APIView):
 
 #Admin Views
 class AdminAllUsersView(APIView):
-    # Enforces that only system admins/staff can access this directory route
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def get(self, request, *args, **kwargs):
         try:
-            # Fetch all users, ordering by newest or by name
             users = User.objects.all().order_by('-id')
             serializer = UserAdminSerializer(users, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -369,7 +352,6 @@ class AdminUserDetailsView(APIView):
 
     def get(self, request, id, *args, **kwargs):
         try:
-            # 🚀 OPTIMIZATION: Prefetch the bound documents instantly in one query execution pass
             user_profile = User.objects.filter(id=id).prefetch_related('documents').first()
 
             if not user_profile:

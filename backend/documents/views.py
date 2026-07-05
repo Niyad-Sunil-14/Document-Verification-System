@@ -635,7 +635,6 @@ class RazorpayOrderCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        # 🚀 MODIFIED: Changed amount to ₹49 to sync with your dynamic Pay-As-You-Verify tier
         amount_in_rupees = 49
         amount_in_paisa = amount_in_rupees * 100 
         currency = "INR"
@@ -682,10 +681,10 @@ class CreateSubscriptionView(APIView):
             
             # Map out values based on the front-end tier arguments
             if plan_type == 'starter_pack':
-                amount_in_paisa = 99 * 100  # ₹99 = 9900 Paise
+                amount_in_paisa = 99 * 100  
                 plan_name = "Starter Pack Subscription"
             else:
-                amount_in_paisa = 299 * 100  # ₹299 = 29900 Paise
+                amount_in_paisa = 299 * 100  
                 plan_name = "Monthly Premium Pass"
 
             currency = "INR"
@@ -697,7 +696,7 @@ class CreateSubscriptionView(APIView):
                 "notes": {
                     "user_id": str(user.id),
                     "fullname": user.fullname,
-                    "plan_type": plan_type  # Saved to verify which plan to add on successful signature match
+                    "plan_type": plan_type  
                 }
             }
 
@@ -747,7 +746,6 @@ class VerifySubscriptionView(APIView):
             # --- SUCCESS: STACK PROFILE CREDITS BASED ON THE ORDER DETAILS ---
             user = request.user
             
-            # Fetch the completed order object from Razorpay to read the metadata notes safely
             rzp_order = razorpay_client.order.fetch(razorpay_order_id)
             plan_type = rzp_order.get('notes', {}).get('plan_type', 'monthly_premium')
 
@@ -763,7 +761,6 @@ class VerifySubscriptionView(APIView):
                 razorpay_signature=razorpay_signature
             )
             
-            # 🚀 Allocate credits according to plan features
             if plan_type == 'starter_pack':
                 user.document_credits += 3  # Add 3 uploads for Starter Pack
                 plan_display_name = "Starter Pack"
@@ -771,7 +768,6 @@ class VerifySubscriptionView(APIView):
                 user.document_credits += 12  # Add 12 uploads for Premium Pass
                 plan_display_name = "Monthly Premium Pass"
 
-            # Dynamic Expiry Extension Logic (stacks dates cleanly)
             if user.subscription_expires_at and user.subscription_expires_at > timezone.now():
                 user.subscription_expires_at = user.subscription_expires_at + timedelta(days=30)
             else:
@@ -779,7 +775,6 @@ class VerifySubscriptionView(APIView):
 
             user.save()
 
-            # Create notification log
             Notification.objects.create(
                 user=user,
                 title="💳 Subscription Activated",
@@ -797,7 +792,6 @@ class PaymentHistoryListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        # 🚀 MODIFIED: Fetch both SUCCESS and FAILED transaction items
         payments = Payment.objects.filter(
             user=request.user, 
             status__in=['SUCCESS', 'FAILED']
@@ -831,9 +825,7 @@ class LogPaymentFailureView(APIView):
         if not order_id:
             return Response({"detail": "Missing order reference mapping."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Run both DB mutations safely inside an atomic transaction block
         with transaction.atomic():
-            # 1. Update or create the Payment record tracking line item as FAILED
             payment, created = Payment.objects.update_or_create(
                 razorpay_order_id=order_id,
                 defaults={
@@ -844,8 +836,6 @@ class LogPaymentFailureView(APIView):
                 }
             )
 
-            # 🚀 2. FIX: Automatically spawn a Notification ledger item so React can fetch it
-            # The title matches your lowercased '.includes("payment failed")' frontend code loop perfectly.
             Notification.objects.create(
                 user=request.user,
                 title="⚠️ Payment Failed",
@@ -867,7 +857,6 @@ class PaymentDetailRetrieveView(RetrieveAPIView):
     
     def get(self, request, id, *args, **kwargs):
         try:
-            # Look up payment record belonging specifically to the logged in user
             payment = Payment.objects.select_related('document').get(id=id, user=request.user)
             
             return Response({
