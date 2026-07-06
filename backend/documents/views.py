@@ -669,23 +669,82 @@ class RazorpayOrderCreateView(APIView):
 # Initialize Razorpay Client
 razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
 
+class SubscriptionDetailsView(APIView):
+    """
+    🚀 DYNAMIC MEMBERSHIP EVALUATOR: Determines user tier state dynamically
+    by scanning the existing Payment ledger for successful active packages.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        
+        # Pull the absolute latest successful purchase order
+        latest_payment = Payment.objects.filter(
+            user=user,
+            status='SUCCESS',
+            plan_type__in=['STARTER_PACK', 'MONTHLY_PREMIUM']
+        ).order_by('-created_at').first()
+
+        is_active = False
+        expires_at = None
+        current_plan = "PAY_AS_YOU_VERIFY"
+
+        # Check if the user has an active expiration date set on their profile
+        if user.subscription_expires_at and user.subscription_expires_at > timezone.now():
+            is_active = True
+            expires_at = user.subscription_expires_at
+            if latest_payment:
+                current_plan = latest_payment.plan_type
+        else:
+            # Emergency safeguard fallback if date passed but flag wasn't cleared
+            if user.is_subscribed:
+                user.is_subscribed = False
+                user.save()
+
+        return Response({
+            "plan_type": current_plan,
+            "is_active": is_active,
+            "is_canceled": not is_active,  # If inactive, allows the front-end to trigger a Renew button
+            "expires_at": expires_at
+        }, status=status.HTTP_200_OK)
+
+
+class CancelSubscriptionView(APIView):
+    """
+    Turns off active access parameters or flags for the user layout.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        user.is_subscribed = False
+        user.subscription_expires_at = timezone.now() # Mark as immediately expired
+        user.save()
+        
+        Notification.objects.create(
+            user=user,
+            title="🛑 Subscription Cancelled",
+            description="Your premium recurring membership limits have been successfully turned off."
+        )
+        return Response({"detail": "Subscription successfully cancelled."}, status=status.HTTP_200_OK)
+
+
+
 class CreateSubscriptionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
         try:
             user = request.user
-            
-            # 🚀 DYNAMIC: Read incoming plan specs from the frontend request
             plan_type = request.data.get('plan_type', 'monthly_premium')
             
-            # Map out values based on the front-end tier arguments
             if plan_type == 'starter_pack':
-                amount_in_paisa = 99 * 100  
-                plan_name = "Starter Pack Subscription"
+                amount_in_rupees = 99
+                amount_in_paisa = amount_in_rupees * 100  
             else:
-                amount_in_paisa = 299 * 100  
-                plan_name = "Monthly Premium Pass"
+                amount_in_rupees = 299
+                amount_in_paisa = amount_in_rupees * 100  
 
             currency = "INR"
 
@@ -702,6 +761,16 @@ class CreateSubscriptionView(APIView):
 
             # Generate order context dynamically with correct price point
             razorpay_order = razorpay_client.order.create(data=order_data)
+
+            # 🚀 PRE-INJECT PENDING RECORD INTO PAYMENTS HISTORY TABLE
+            Payment.objects.create(
+                user=user,
+                plan_type=plan_type.upper(),
+                amount=amount_in_rupees,  # Saves clean integer/decimal tracking
+                currency=currency,
+                status='PENDING',
+                razorpay_order_id=razorpay_order['id']
+            )
 
             return Response({
                 "order_id": razorpay_order['id'],
@@ -720,7 +789,6 @@ class CreateSubscriptionView(APIView):
                 {"detail": f"An unexpected error blocked transaction initiation: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
 
 
 class VerifySubscriptionView(APIView):
@@ -741,33 +809,31 @@ class VerifySubscriptionView(APIView):
             try:
                 razorpay_client.utility.verify_payment_signature(verification_payload)
             except razorpay.errors.SignatureVerificationError:
+                # Update existing pending record to FAILED status
+                Payment.objects.filter(razorpay_order_id=razorpay_order_id).update(status='FAILED')
                 return Response({"detail": "Cryptographic signature validation check failed."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # --- SUCCESS: STACK PROFILE CREDITS BASED ON THE ORDER DETAILS ---
             user = request.user
-            
             rzp_order = razorpay_client.order.fetch(razorpay_order_id)
             plan_type = rzp_order.get('notes', {}).get('plan_type', 'monthly_premium')
 
             user.is_subscribed = True
 
-            Payment.objects.create(
-                user=user,
-                plan_type=plan_type.upper(),  # 'STARTER_PACK' or 'MONTHLY_PREMIUM'
-                amount=99.00 if plan_type == 'starter_pack' else 299.00,
+            # 🚀 UPDATE PRE-EXISTING PENDING ROW TO SUCCESS
+            Payment.objects.filter(razorpay_order_id=razorpay_order_id).update(
                 status='SUCCESS',
-                razorpay_order_id=razorpay_order_id,
                 razorpay_payment_id=razorpay_payment_id,
                 razorpay_signature=razorpay_signature
             )
             
             if plan_type == 'starter_pack':
-                user.document_credits += 3  # Add 3 uploads for Starter Pack
+                user.document_credits += 3  
                 plan_display_name = "Starter Pack"
             else:
-                user.document_credits += 12  # Add 12 uploads for Premium Pass
+                user.document_credits += 12  
                 plan_display_name = "Monthly Premium Pass"
 
+            # Dynamically push expiration dates by 30 rolling calendar days
             if user.subscription_expires_at and user.subscription_expires_at > timezone.now():
                 user.subscription_expires_at = user.subscription_expires_at + timedelta(days=30)
             else:

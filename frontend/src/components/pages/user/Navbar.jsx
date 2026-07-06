@@ -78,7 +78,7 @@ export default function Navbar() {
               <Link to="/user-dashboard" className={getNavLinkClass('/user-dashboard')}>Dashboard</Link>
               <Link to="/documents" className={getNavLinkClass('/documents')}>My Documents</Link>
               <Link to="/upload" className={getNavLinkClass('/upload')}>Upload Document</Link>
-              {/* 🔥 Added Pricing Link to Navigation Layout */}
+              <Link to="/subscription" className={getNavLinkClass('/subscription')}>Subscription</Link>
               <Link to="/pricing" className={getNavLinkClass('/pricing')}>Pricing</Link>
               <Link to="/support" className={getNavLinkClass('/support')}>Help & Support</Link>
             </div>

@@ -22,6 +22,7 @@ import PaymentHistory from './components/pages/user/PaymentHistory';
 import PaymentDetails from './components/pages/user/PaymentDetails';
 import AllUsers from './components/pages/admin/AllUsers';
 import UserDetails from './components/pages/admin/UserDetails';
+import SubscriptionManagement from './components/pages/user/SubscriptionManagement';
 
 function App() {
   return (
@@ -132,6 +133,13 @@ function App() {
           <Route path="/payments/:id" element={
               <ProtectedRoute allowedRoles={['USER']}>
                 <PaymentDetails />
+              </ProtectedRoute>
+            } 
+          />
+
+          <Route path="/subscription" element={
+              <ProtectedRoute allowedRoles={['USER']}>
+                <SubscriptionManagement />
               </ProtectedRoute>
             } 
           />
