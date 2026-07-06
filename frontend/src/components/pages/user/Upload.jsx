@@ -237,7 +237,7 @@ export default function Upload() {
         <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 sm:p-8">
           
           {/* Visual Credits Indicator Badge */}
-          {user && user.is_subscribed ? (
+          {user && user.document_credits > 0 ? (
             <div className="mb-6 p-3 bg-violet-50 border border-violet-100 rounded-xl flex justify-between items-center text-xs text-violet-700 font-medium">
               <span>Available Document Upload Balance:</span>
               <span className="bg-violet-600 text-white font-bold px-2.5 py-1 rounded-md">

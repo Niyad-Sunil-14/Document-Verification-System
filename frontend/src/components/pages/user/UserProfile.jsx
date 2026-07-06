@@ -291,7 +291,7 @@ export default function UserProfile() {
                         <div className="sm:col-span-2">
                           {user?.is_subscribed ? (
                             <span className="block text-sm font-semibold text-amber-700 bg-amber-50/60 border border-amber-100 px-4 py-2.5 rounded-xl shadow-inner">
-                              Expires on {formatDate(user?.subscription_expires_at)}
+                              Expires on {formatDate(user?.subscription_expires_at)} 
                             </span>
                           ) : (
                             <span className="block text-sm font-semibold text-gray-500 bg-slate-50 border border-slate-100 px-4 py-2.5 rounded-xl shadow-inner select-none">

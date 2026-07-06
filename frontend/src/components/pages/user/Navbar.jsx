@@ -172,24 +172,38 @@ export default function Navbar() {
                 <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-xl shadow-lg bg-white ring-1 ring-black ring-opacity-5 border border-slate-100 py-1 z-50">
                   {/* Account and Dynamic Status Section */}
                   <div className="px-4 py-2.5 text-xs border-b border-slate-100 bg-slate-50/50">
-                    Active Account: <br /><strong className="text-slate-800 break-all">{user?.email}</strong>
+                    Active Account: <br />
+                    <strong className="text-slate-800 break-all">{user?.email}</strong>
                     
-                    {/* Dynamic Credit Counter Gauge */}
+                    {/* 🚀 FIXED: Added the missing logical '&&' operator here */}
+                    {user?.document_credits > 0 && (
+                      <div className="mt-2 pt-2 border-t border-slate-100 flex justify-between items-center text-gray-400 font-medium">
+                        <span>Credits Left:</span>
+                        <span className="font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-md">
+                          {user?.document_credits ?? 0}
+                        </span>
+                      </div>
+                    )}
+                    
                     {user?.is_subscribed && (
-                      <div>
-                        <div className="mt-2 pt-2 border-t border-slate-100 flex justify-between items-center text-gray-400 font-medium">
-                          <span>Credits Left:</span>
-                          <span className="font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-md">
-                            {user?.document_credits ?? 0}
-                          </span>
-                        </div>
-
+                      <div className="mt-2">
                         <div className="mt-2 flex items-center justify-center space-x-1 w-full px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/60 shadow-sm">
                           <span>👑</span>
                           <span className="tracking-wide uppercase">PREMIUM PASS ACTIVE</span>
                         </div>
                       </div>
                     )}
+
+                    {/* 🚀 ADDED: Quick navigation link to the subscription interface */}
+                    <div className="mt-3 pt-2 border-t border-slate-100">
+                      <Link 
+                        to="/subscription" 
+                        className="flex items-center justify-between font-bold text-slate-600 hover:text-violet-600 transition group"
+                      >
+                        <span>Manage Subscription</span>
+                        <span className="text-[10px] text-gray-400 group-hover:text-violet-600 transition-transform group-hover:translate-x-0.5">→</span>
+                      </Link>
+                    </div>
                   </div>
 
                   {/* Standard Navigation Links Block */}
