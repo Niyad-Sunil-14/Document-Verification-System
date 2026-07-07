@@ -9,9 +9,10 @@ export default function MyDocument() {
   // 1. STATE MANAGEMENT
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [backgroundLoading, setBackgroundLoading] = useState(false); // 🚀 FIX: Smooth background fetching state
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [typedSearch, setTypedSearch] = useState(''); // Fluid immediate state for text typing
+  const [typedSearch, setTypedSearch] = useState(''); 
   const [filterStatus, setFilterStatus] = useState('ALL');
 
   // PAGINATION STATES
@@ -32,18 +33,22 @@ export default function MyDocument() {
     return () => clearTimeout(delayDebounceFn);
   }, [typedSearch]);
 
-  // 2. FETCH USER DOCUMENTS (RE-FIRES ON FILTER, SEARCH, OR PAGE CHANGES)
+  // 2. FETCH USER DOCUMENTS
   useEffect(() => {
     const fetchUserDocuments = async () => {
       try {
-        setLoading(true);
+        // 🚀 FIX: Only show the massive layout-destroying spinner on the very first mount or filter reset.
+        // For pagination turns, we use background state to prevent layout collapse.
+        if (currentPage === 1) {
+          setLoading(true);
+        } else {
+          setBackgroundLoading(true);
+        }
         setError('');
         
-        // Build query string combining pagination, filter status, and debounced search
         const url = `documents/list/?status=${filterStatus}&search=${encodeURIComponent(searchQuery)}&page=${currentPage}`;
         const response = await axiosInstance.get(url);
         
-        // Populate states dynamically using backend counts
         setDocuments(response.data.results || []);
         setTotalCount(response.data.count || 0);
         setHasNext(!!response.data.next);
@@ -54,26 +59,26 @@ export default function MyDocument() {
         setError("Failed to load your documents configuration.");
       } finally {
         setLoading(false);
+        setBackgroundLoading(false); // 🚀 FIX: Drop background overlay lock
       }
     };
 
     fetchUserDocuments();
   }, [filterStatus, searchQuery, currentPage]); 
 
-  // 🚀 FIXED OPTIMIZATION HANDLERS: Added explicit event preventions to stop page refreshes
   const handleFilterChange = (e, status) => {
     e.preventDefault();
     setFilterStatus(status);
-    setCurrentPage(1); // Reset to page 1 for the new selection pool
+    setCurrentPage(1); 
   };
 
   const handleSearchChange = (e) => {
     setTypedSearch(e.target.value);
-    setCurrentPage(1); // Reset to page 1 when starting a new search
+    setCurrentPage(1); 
   };
 
   const handlePageSelect = (e, pageNum) => {
-    e.preventDefault(); // 🚀 Prevents full-page reloading context completely
+    e.preventDefault(); 
     setCurrentPage(pageNum);
   };
 
@@ -87,7 +92,6 @@ export default function MyDocument() {
     if (hasPrevious) setCurrentPage(prev => Math.max(prev - 1, 1));
   };
 
-  // Dynamic Badge Styling Utility Function
   const getStatusBadge = (status) => {
     const badges = {
       APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -106,9 +110,7 @@ export default function MyDocument() {
       .replace(/\b\w/g, (char) => char.toUpperCase());
 
     const isPdf = doc.file?.toLowerCase().includes('.pdf');
-    const labelSuffix = isPdf ? "PDF" : "Document";
-
-    return `${cleanType} ${labelSuffix}`;
+    return `${cleanType} ${isPdf ? "PDF" : "Document"}`;
   };
 
   const viewDetail = (id) => {
@@ -131,8 +133,6 @@ export default function MyDocument() {
 
         {/* CONTROLS BAR */}
         <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-4 mb-8 flex flex-col md:flex-row gap-4 justify-between items-center">
-          
-          {/* Text Search Box */}
           <div className="relative w-full md:w-80">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">🔍</span>
             <input
@@ -144,24 +144,20 @@ export default function MyDocument() {
             />
           </div>
 
-          {/* Filter Tabs */}
           <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-bold text-gray-500 w-full md:w-auto overflow-x-auto">
             {['ALL', 'PENDING', 'APPROVED', 'REJECTED'].map((status) => (
               <button
                 key={status}
-                type="button" // 🚀 Force type="button" to prevent form boundary triggers
+                type="button" 
                 onClick={(e) => handleFilterChange(e, status)}
                 className={`flex-1 md:flex-initial px-4 py-2 rounded-lg transition-all whitespace-nowrap cursor-pointer ${
-                  filterStatus === status 
-                    ? 'bg-white text-slate-900 shadow-sm' 
-                    : 'hover:text-slate-900'
+                  filterStatus === status ? 'bg-white text-slate-900 shadow-sm' : 'hover:text-slate-900'
                 }`}
               >
                 {status.charAt(0) + status.slice(1).toLowerCase()}
               </button>
             ))}
           </div>
-
         </div>
 
         {/* MAIN CONTENT FEED AREA */}
@@ -177,7 +173,7 @@ export default function MyDocument() {
           <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center max-w-xl mx-auto shadow-sm">
             <span className="text-5xl block mb-4">📂</span>
             <h3 className="text-lg font-bold text-slate-900">No Documents Found</h3>
-            <p className="text-gray-400 text-sm mt-1">We couldn't locate any items matching your active search filters or keywords.</p>
+            <p className="text-gray-400 text-sm mt-1">We couldn't locate any items matching your active search filters.</p>
             <button 
               type="button"
               onClick={(e) => { e.preventDefault(); setTypedSearch(''); setSearchQuery(''); setFilterStatus('ALL'); setCurrentPage(1); }}
@@ -187,53 +183,62 @@ export default function MyDocument() {
             </button>
           </div>
         ) : (
-          /* Dynamic Grid Feed */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {documents.map((doc) => (
-              <div 
-                key={doc.id} 
-                className="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 flex flex-col overflow-hidden"
-              >
-                <div className="p-5 flex-1 space-y-4">
-                  <div className="flex items-start justify-between space-x-2">
-                    <div className="flex items-center space-x-3 truncate">
-                      <span className="text-3xl flex-shrink-0">
-                        {doc.file?.toLowerCase().includes('.pdf') ? '📕' : '📄'}
-                      </span>
-                      <div className="truncate">
-                        <h3 className="text-sm font-bold text-slate-900 truncate max-w-[180px]" title={generateDocumentLabel(doc)}>
-                          {generateDocumentLabel(doc)}
-                        </h3>
-                        {doc.extracted_text && (
-                          <p className="text-[10px] text-gray-400 block truncate max-w-[180px] italic mt-0.5">
-                            "{doc.extracted_text.slice(0, 30)}..."
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <span className={getStatusBadge(doc.status)}>
-                      {doc.status}
-                    </span>
-                  </div>
-
-                  <div className="text-xs font-medium text-gray-400 space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <div>Uploaded: <span className="text-slate-700 font-semibold">{doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : 'Just Now'}</span></div>
-                    <div className="truncate">Storage Key: <span className="font-mono text-slate-600">#{doc.id}</span></div>
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 border-t border-slate-100 px-5 py-3 flex justify-center items-center text-xs font-bold">
-                    <button 
-                        type="button"
-                        onClick={() => viewDetail(doc.id)}
-                        className="text-violet-600 hover:text-violet-800 transition flex items-center space-x-1 cursor-pointer bg-transparent border-0 outline-none"
-                    >
-                        <span>View Analysis Details</span> 
-                        <span>→</span>
-                    </button>
-                </div>
+          /* 🚀 FIX: Grid Wrapper now maintains layout structure opacity with a background loading shield */
+          <div className={`relative transition-opacity duration-200 ${backgroundLoading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+            
+            {backgroundLoading && (
+              <div className="absolute inset-0 flex items-center justify-center z-20">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
               </div>
-            ))}
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {documents.map((doc) => (
+                <div 
+                  key={doc.id} 
+                  className="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 flex flex-col overflow-hidden"
+                >
+                  <div className="p-5 flex-1 space-y-4">
+                    <div className="flex items-start justify-between space-x-2">
+                      <div className="flex items-center space-x-3 truncate">
+                        <span className="text-3xl flex-shrink-0">
+                          {doc.file?.toLowerCase().includes('.pdf') ? '📕' : '📄'}
+                        </span>
+                        <div className="truncate">
+                          <h3 className="text-sm font-bold text-slate-900 truncate max-w-[180px]" title={generateDocumentLabel(doc)}>
+                            {generateDocumentLabel(doc)}
+                          </h3>
+                          {doc.extracted_text && (
+                            <p className="text-[10px] text-gray-400 block truncate max-w-[180px] italic mt-0.5">
+                              "{doc.extracted_text.slice(0, 30)}..."
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <span className={getStatusBadge(doc.status)}>
+                        {doc.status}
+                      </span>
+                    </div>
+
+                    <div className="text-xs font-medium text-gray-400 space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <div>Uploaded: <span className="text-slate-700 font-semibold">{doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : 'Just Now'}</span></div>
+                      <div className="truncate">Storage Key: <span className="font-mono text-slate-600">#{doc.id}</span></div>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 border-t border-slate-100 px-5 py-3 flex justify-center items-center text-xs font-bold">
+                      <button 
+                          type="button"
+                          onClick={() => viewDetail(doc.id)}
+                          className="text-violet-600 hover:text-violet-800 transition flex items-center space-x-1 cursor-pointer bg-transparent border-0 outline-none"
+                      >
+                          <span>View Analysis Details</span> 
+                          <span>→</span>
+                      </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -246,9 +251,9 @@ export default function MyDocument() {
 
             <div className="flex items-center space-x-2">
               <button
-                type="button" // 🚀 Prevents random form executions
-                disabled={!hasPrevious}
-                onClick={handlePrevPage} // 🚀 Using safe custom navigation trigger
+                type="button" 
+                disabled={!hasPrevious || backgroundLoading}
+                onClick={handlePrevPage} 
                 className="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-lg shadow-sm transition hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed select-none cursor-pointer"
               >
                 ← Previous
@@ -261,7 +266,8 @@ export default function MyDocument() {
                     <button
                       key={pageNum}
                       type="button"
-                      onClick={(e) => handlePageSelect(e, pageNum)} // 🚀 Using safe selection trigger
+                      disabled={backgroundLoading}
+                      onClick={(e) => handlePageSelect(e, pageNum)} 
                       className={`w-8 h-8 rounded-lg text-xs font-bold transition flex items-center justify-center border cursor-pointer ${
                         currentPage === pageNum
                           ? 'bg-slate-800 text-white border-transparent'
@@ -276,8 +282,8 @@ export default function MyDocument() {
 
               <button
                 type="button"
-                disabled={!hasNext}
-                onClick={handleNextPage} // 🚀 Using safe custom navigation trigger
+                disabled={!hasNext || backgroundLoading}
+                onClick={handleNextPage} 
                 className="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-lg shadow-sm transition hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed select-none cursor-pointer"
               >
                 Next →

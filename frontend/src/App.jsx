@@ -1,153 +1,18 @@
-import { useState } from 'react'
-import Login from './components/auth/Login'
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
-import Register from './components/auth/Register';
-import AdminLogin from './components/auth/AdminLogin';
-import Dashboard from './components/pages/user/Dashboard';
-import AdminDashboard from './components/pages/admin/AdminDashboard';
-import ForgotPassword from './components/auth/ForgotPassword';
-import ProtectedRoute from './routes/ProtectedRoute';
-import Home from './components/pages/Home';
-import Upload from './components/pages/user/Upload';
-import MyDocument from './components/pages/user/MyDocument';
-import DocumentDetails from './components/pages/user/DocumentDetails';
-import UserProfile from './components/pages/user/UserProfile';
-import GuestRoutes from './routes/GuestRoute';
-import RegisterOTP from './components/auth/RegisterOTP';
-import AllDocuments from './components/pages/admin/AllDocuments';
-import AdminDocumentDetails from './components/pages/admin/AdminDocumentDetails';
-import Notification from './components/pages/user/Notification';
-import Pricing from './components/pages/user/Pricing';
-import PaymentHistory from './components/pages/user/PaymentHistory';
-import PaymentDetails from './components/pages/user/PaymentDetails';
-import AllUsers from './components/pages/admin/AllUsers';
-import UserDetails from './components/pages/admin/UserDetails';
-import SubscriptionManagement from './components/pages/user/SubscriptionManagement';
+import { BrowserRouter, Routes } from 'react-router-dom';
+import CommonRoute from './routes/CommonRoute';
+import UserRoute from './routes/UserRoute';
+import AdminRoute from './routes/AdminRoute';
 
 function App() {
   return (
-    <>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />} />
-
-          {/* GUEST-ONLY ROUTES */}
-          <Route element={<GuestRoutes />}>
-            <Route path='/admin-login' element={<AdminLogin/>}/>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register/>} />
-            <Route path='/forgot-password' element={<ForgotPassword/>}/>
-            <Route path='/verify-registration' element={<RegisterOTP/>}/>
-          </Route>
-
-
-          {/* 🔒 ADMINISTRATIVE PANELS */}
-          <Route path='/admin-dashboard' element={
-              <ProtectedRoute allowedRoles={['ADMIN']}>
-                <AdminDashboard/>
-              </ProtectedRoute>
-            }
-          />
-
-          <Route path='/all-documents' element={
-              <ProtectedRoute allowedRoles={['ADMIN']}>
-                <AllDocuments/>
-              </ProtectedRoute>
-            }
-          />
-
-          <Route path='/admin/documents/:id' element={
-              <ProtectedRoute allowedRoles={['ADMIN']}>
-                <AdminDocumentDetails/>
-              </ProtectedRoute>
-            }
-          />
-
-          <Route path='/all-users' element={
-              <ProtectedRoute allowedRoles={['ADMIN']}>
-                <AllUsers/>
-              </ProtectedRoute>
-            }
-          />
-
-          <Route path='admin/users/:id' element={
-              <ProtectedRoute allowedRoles={['ADMIN']}>
-                <UserDetails/>
-              </ProtectedRoute>
-            }
-          />
-
-
-          {/* 🔒 CLIENT PORTAL PATHS (Strictly protected from Admins using allowedRoles) */}
-          <Route path="/user-dashboard" element={
-              <ProtectedRoute allowedRoles={['USER']}>
-                <Dashboard/>
-              </ProtectedRoute>
-            }
-          />
-          <Route path='/upload' element={
-              <ProtectedRoute allowedRoles={['USER']}>
-                <Upload/>
-              </ProtectedRoute>
-            }
-          />
-          <Route path='/documents' element={
-              <ProtectedRoute allowedRoles={['USER']}>
-                <MyDocument/>
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/documents/:id" element={
-              <ProtectedRoute allowedRoles={['USER']}>
-                <DocumentDetails/>
-              </ProtectedRoute>
-            } 
-          />
-          <Route path='/profile' element={
-              <ProtectedRoute allowedRoles={['USER']}>
-                <UserProfile/>
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/notifications" element={
-            <ProtectedRoute allowedRoles={['USER']}>
-                <Notification/>
-              </ProtectedRoute>
-            }            
-          />
-
-          <Route path="/pricing" element={
-            <ProtectedRoute allowedRoles={['USER']}>
-                <Pricing/>
-              </ProtectedRoute>
-            }            
-          />
-
-          <Route path="/payment-history" element={
-            <ProtectedRoute allowedRoles={['USER']}>
-                <PaymentHistory/>
-              </ProtectedRoute>
-            }            
-          />
-
-          <Route path="/payments/:id" element={
-              <ProtectedRoute allowedRoles={['USER']}>
-                <PaymentDetails />
-              </ProtectedRoute>
-            } 
-          />
-
-          <Route path="/subscription" element={
-              <ProtectedRoute allowedRoles={['USER']}>
-                <SubscriptionManagement />
-              </ProtectedRoute>
-            } 
-          />
-
-        </Routes>
-      </BrowserRouter>
-    </>
-  )
+    <BrowserRouter>
+      <Routes>
+        {CommonRoute()}
+        {UserRoute()}
+        {AdminRoute()}
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
-export default App
+export default App;
