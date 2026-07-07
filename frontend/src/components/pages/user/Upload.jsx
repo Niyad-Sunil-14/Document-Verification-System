@@ -366,7 +366,7 @@ export default function Upload() {
                   </div>
                 ) : (
                   <span>
-                    {user && user.document_credits > 0 ? '1 credits' : 'Verify and Pay'}
+                    {user && user.document_credits > 0 ? '1 credits' : 'Pay ₹49 and get Verified'}
                   </span>
                 )}
               </button>

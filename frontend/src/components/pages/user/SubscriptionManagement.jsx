@@ -12,7 +12,6 @@ export default function SubscriptionManagement() {
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // 🚀 ADDED: Custom Pop-up Modal State Toggle
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
 
   const loadRazorpayScript = () => {
@@ -57,9 +56,8 @@ export default function SubscriptionManagement() {
     fetchSubscriptionDashboardData();
   }, []);
 
-  // 🚀 MODIFIED: This function executes only AFTER modal confirmation trigger
   const handleConfirmCancel = async () => {
-    setIsCancelModalOpen(false); // Close the modal container overlay
+    setIsCancelModalOpen(false);
     
     try {
       setActionLoading(true);
@@ -195,8 +193,8 @@ export default function SubscriptionManagement() {
                 </h2>
                 <p className="text-xs font-medium text-slate-500 max-w-md leading-relaxed">
                   {subscription?.is_active
-                    ? `Premium benefits are fully enabled on this account. Your continuous processing privileges will refresh on ${new Date(subscription.expires_at).toLocaleDateString('en-IN')}.`
-                    : "You are currently using the Pay-As-You-Verify plan. Upgrade or buy a package to reset your active processing credits."}
+                    ? `Premium privileges are fully enabled on this account. Your continuous processing limits will refresh on ${new Date(subscription.expires_at).toLocaleDateString('en-IN')}.`
+                    : "Your profile is sitting on basic standard operational tier structures."}
                 </p>
               </div>
 
@@ -204,7 +202,7 @@ export default function SubscriptionManagement() {
                 {subscription?.is_active ? (
                   <button
                     disabled={actionLoading}
-                    onClick={() => setIsCancelModalOpen(true)} // 🚀 Triggers custom modal pop-up
+                    onClick={() => setIsCancelModalOpen(true)}
                     className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 rounded-xl transition duration-150 cursor-pointer disabled:opacity-40 select-none shadow-sm"
                   >
                     Cancel Membership
@@ -251,7 +249,16 @@ export default function SubscriptionManagement() {
                         {/* Info Block Left */}
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-2.5">
-                            <div className="w-2.5 h-2.5 rounded-full bg-slate-200 flex items-center justify-center text-[8px]" />
+                            
+                            {/* 🚀 DYNAMIC COLOR STATUS DOT INDICATOR */}
+                            <div className={`w-2 h-2 rounded-full shadow-sm ${
+                              pay.status !== 'SUCCESS' 
+                                ? 'bg-rose-500' 
+                                : isRowTrulyExpired 
+                                ? 'bg-slate-300' 
+                                : 'bg-emerald-500 animate-pulse'
+                            }`} />
+
                             <h4 className="font-extrabold text-slate-800 text-sm">
                               {formatPlanDisplay(pay.plan_type)}
                             </h4>
@@ -312,7 +319,7 @@ export default function SubscriptionManagement() {
         )}
       </main>
 
-      {/* 🚀 PREMIUM MODAL OVERLAY COMPONENT DIALOG PANEL */}
+      {/* PREMIUM MODAL OVERLAY COMPONENT DIALOG PANEL */}
       {isCancelModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white rounded-2xl border border-slate-100 p-6 max-w-sm w-full shadow-2xl space-y-4">
@@ -322,7 +329,7 @@ export default function SubscriptionManagement() {
             </div>
             
             <p className="text-xs text-slate-500 font-medium leading-relaxed">
-              Are you sure you want to turn off your {formatPlanDisplay(subscription.plan_type)} subscription?
+              Are you sure you want to turn off your {formatPlanDisplay(subscription?.plan_type)} subscription?
             </p>
 
             <div className="flex space-x-3 pt-2 text-xs font-bold">

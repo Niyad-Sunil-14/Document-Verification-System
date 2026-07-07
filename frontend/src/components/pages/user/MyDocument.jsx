@@ -11,7 +11,7 @@ export default function MyDocument() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [typedSearch, setTypedSearch] = useState(''); // 🚀 Fluid immediate state for text typing
+  const [typedSearch, setTypedSearch] = useState(''); // Fluid immediate state for text typing
   const [filterStatus, setFilterStatus] = useState('ALL');
 
   // PAGINATION STATES
@@ -23,8 +23,7 @@ export default function MyDocument() {
   const ITEMS_PER_PAGE = 12;
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE) || 1;
 
-  // 🚀 DEBOUNCE EFFECT FOR SEARCH INPUT
-  // Delays pushing changes to searchQuery by 400ms while user is actively typing
+  // DEBOUNCE EFFECT FOR SEARCH INPUT
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       setSearchQuery(typedSearch);
@@ -61,16 +60,31 @@ export default function MyDocument() {
     fetchUserDocuments();
   }, [filterStatus, searchQuery, currentPage]); 
 
-  // Tab switch handler
-  const handleFilterChange = (status) => {
+  // 🚀 FIXED OPTIMIZATION HANDLERS: Added explicit event preventions to stop page refreshes
+  const handleFilterChange = (e, status) => {
+    e.preventDefault();
     setFilterStatus(status);
     setCurrentPage(1); // Reset to page 1 for the new selection pool
   };
 
-  // Text input change handler
   const handleSearchChange = (e) => {
     setTypedSearch(e.target.value);
     setCurrentPage(1); // Reset to page 1 when starting a new search
+  };
+
+  const handlePageSelect = (e, pageNum) => {
+    e.preventDefault(); // 🚀 Prevents full-page reloading context completely
+    setCurrentPage(pageNum);
+  };
+
+  const handleNextPage = (e) => {
+    e.preventDefault();
+    if (hasNext) setCurrentPage(prev => prev + 1);
+  };
+
+  const handlePrevPage = (e) => {
+    e.preventDefault();
+    if (hasPrevious) setCurrentPage(prev => Math.max(prev - 1, 1));
   };
 
   // Dynamic Badge Styling Utility Function
@@ -83,7 +97,6 @@ export default function MyDocument() {
     return `px-2.5 py-1 rounded-full text-xs font-bold border ${badges[status] || badges.PENDING}`;
   };
 
-  // Generates a human-readable title card description text label
   const generateDocumentLabel = (doc) => {
     if (!doc) return "Document Resource";
     const typeRaw = doc.document_type || "GENERAL";
@@ -116,7 +129,7 @@ export default function MyDocument() {
           </div>
         </div>
 
-        {/* CONTROLS BAR (Placed statically outside conditional loops to maintain typing focus) */}
+        {/* CONTROLS BAR */}
         <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-4 mb-8 flex flex-col md:flex-row gap-4 justify-between items-center">
           
           {/* Text Search Box */}
@@ -136,7 +149,8 @@ export default function MyDocument() {
             {['ALL', 'PENDING', 'APPROVED', 'REJECTED'].map((status) => (
               <button
                 key={status}
-                onClick={() => handleFilterChange(status)}
+                type="button" // 🚀 Force type="button" to prevent form boundary triggers
+                onClick={(e) => handleFilterChange(e, status)}
                 className={`flex-1 md:flex-initial px-4 py-2 rounded-lg transition-all whitespace-nowrap cursor-pointer ${
                   filterStatus === status 
                     ? 'bg-white text-slate-900 shadow-sm' 
@@ -160,13 +174,13 @@ export default function MyDocument() {
             ⚠️ {error}
           </div>
         ) : documents.length === 0 ? (
-          /* 🚀 Clean Empty State container isolated below the search bar to preserve keyboard focus */
           <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center max-w-xl mx-auto shadow-sm">
             <span className="text-5xl block mb-4">📂</span>
             <h3 className="text-lg font-bold text-slate-900">No Documents Found</h3>
             <p className="text-gray-400 text-sm mt-1">We couldn't locate any items matching your active search filters or keywords.</p>
             <button 
-              onClick={() => { setTypedSearch(''); setSearchQuery(''); setFilterStatus('ALL'); setCurrentPage(1); }}
+              type="button"
+              onClick={(e) => { e.preventDefault(); setTypedSearch(''); setSearchQuery(''); setFilterStatus('ALL'); setCurrentPage(1); }}
               className="mt-5 text-xs font-bold text-violet-600 hover:underline cursor-pointer bg-transparent border-none p-0 outline-none"
             >
               Reset Filters
@@ -210,6 +224,7 @@ export default function MyDocument() {
 
                 <div className="bg-slate-50 border-t border-slate-100 px-5 py-3 flex justify-center items-center text-xs font-bold">
                     <button 
+                        type="button"
                         onClick={() => viewDetail(doc.id)}
                         className="text-violet-600 hover:text-violet-800 transition flex items-center space-x-1 cursor-pointer bg-transparent border-0 outline-none"
                     >
@@ -231,8 +246,9 @@ export default function MyDocument() {
 
             <div className="flex items-center space-x-2">
               <button
+                type="button" // 🚀 Prevents random form executions
                 disabled={!hasPrevious}
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                onClick={handlePrevPage} // 🚀 Using safe custom navigation trigger
                 className="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-lg shadow-sm transition hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed select-none cursor-pointer"
               >
                 ← Previous
@@ -244,7 +260,8 @@ export default function MyDocument() {
                   return (
                     <button
                       key={pageNum}
-                      onClick={() => setCurrentPage(pageNum)}
+                      type="button"
+                      onClick={(e) => handlePageSelect(e, pageNum)} // 🚀 Using safe selection trigger
                       className={`w-8 h-8 rounded-lg text-xs font-bold transition flex items-center justify-center border cursor-pointer ${
                         currentPage === pageNum
                           ? 'bg-slate-800 text-white border-transparent'
@@ -258,8 +275,9 @@ export default function MyDocument() {
               </div>
 
               <button
+                type="button"
                 disabled={!hasNext}
-                onClick={() => setCurrentPage(prev => prev + 1)}
+                onClick={handleNextPage} // 🚀 Using safe custom navigation trigger
                 className="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-lg shadow-sm transition hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed select-none cursor-pointer"
               >
                 Next →
