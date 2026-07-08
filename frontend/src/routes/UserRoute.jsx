@@ -12,6 +12,7 @@ import SubscriptionManagement from '../components/pages/user/SubscriptionManagem
 import UserDashboard from '../components/pages/user/UserDashboard'
 import AccountSettings from '../components/pages/user/AccountSettings'
 import NotificationsPage from '../components/pages/user/Notification'
+import Support from '../components/pages/user/Support'
 
 function UserRoute() {
   return (
@@ -85,6 +86,13 @@ function UserRoute() {
           <Route path="/settings" element={
               <ProtectedRoute allowedRoles={['USER']}>
                 <AccountSettings />
+              </ProtectedRoute>
+            } 
+          />
+
+          <Route path="/support" element={
+              <ProtectedRoute allowedRoles={['USER']}>
+                <Support/>
               </ProtectedRoute>
             } 
           />
