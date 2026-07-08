@@ -11,6 +11,7 @@ import PaymentDetails from '../components/pages/user/PaymentDetails'
 import SubscriptionManagement from '../components/pages/user/SubscriptionManagement'
 import UserDashboard from '../components/pages/user/UserDashboard'
 import AccountSettings from '../components/pages/user/AccountSettings'
+import NotificationsPage from '../components/pages/user/Notification'
 
 function UserRoute() {
   return (
@@ -48,7 +49,7 @@ function UserRoute() {
           />
           <Route path="/notifications" element={
             <ProtectedRoute allowedRoles={['USER']}>
-                <Notification/>
+                <NotificationsPage/>
               </ProtectedRoute>
             }            
           />

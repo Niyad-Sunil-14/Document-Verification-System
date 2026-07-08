@@ -6,7 +6,7 @@ import axiosInstance from '../../../api/Axiosinstance';
 export default function Pricing() {
   const navigate = useNavigate();
   
-  // 🔥 FIXED: Track the specific plan identifier string instead of a boolean flag
+  // Track the specific plan identifier string instead of a boolean flag
   const [processingPlan, setProcessingPlan] = useState(null); 
 
   // Helper function to load Razorpay SDK dynamically via Promises
@@ -78,7 +78,6 @@ export default function Pricing() {
         },
         modal: {
           ondismiss: async function () {
-            // Dynamic safety check: Only calls the function if it exists in this scope
             if (window.setIsUploading) setIsUploading(false);
             
             try {
@@ -163,15 +162,16 @@ export default function Pricing() {
   return (
     <>
       <Navbar />
-      <div className="bg-slate-50 min-h-[calc(100vh-4rem)] py-12 px-4 sm:px-6 lg:px-8">
+      {/* 🚀 FIXED: Dynamic outer viewport context tracking theme switches */}
+      <div className="bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 min-h-[calc(100vh-4rem)] py-12 px-4 sm:px-6 lg:px-8 transition-colors duration-200">
         <div className="max-w-6xl mx-auto">
           
           {/* Header Block */}
           <div className="text-center max-w-3xl mx-auto mb-16">
-            <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">
+            <h1 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Simple, Transparent Pricing
             </h1>
-            <p className="mt-4 text-lg text-gray-500">
+            <p className="mt-4 text-lg text-gray-500 dark:text-slate-400">
               Choose the plan that fits your verification frequency. Pay per single scan or unlock bundled credits with our monthly subscription.
             </p>
           </div>
@@ -179,12 +179,13 @@ export default function Pricing() {
           {/* Cards Layout Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
             {tiers.map((tier, idx) => (
+              /* 🚀 FIXED: Grid cards layout adaptive configurations for dual theme presentation modes */
               <div 
                 key={idx} 
-                className={`bg-white rounded-2xl p-8 flex flex-col justify-between transition border shadow-sm relative ${
+                className={`bg-white dark:bg-slate-800 rounded-2xl p-8 flex flex-col justify-between transition border shadow-sm relative ${
                   tier.highlighted 
-                    ? 'border-violet-600 ring-2 ring-violet-600/10 scale-105 z-10' 
-                    : 'border-slate-200 hover:border-slate-300'
+                    ? 'border-violet-600 ring-2 ring-violet-600/10 dark:ring-violet-500/20 scale-105 z-10' 
+                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                 }`}
               >
                 {tier.highlighted && (
@@ -194,20 +195,20 @@ export default function Pricing() {
                 )}
 
                 <div>
-                  <h3 className="text-xl font-bold text-slate-900">{tier.name}</h3>
-                  <p className="text-xs text-gray-400 mt-1 min-h-[32px]">{tier.description}</p>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">{tier.name}</h3>
+                  <p className="text-xs text-gray-400 dark:text-slate-400 mt-1 min-h-[32px]">{tier.description}</p>
                   
                   <div className="mt-4 flex items-baseline">
-                    <span className="text-4xl font-extrabold text-slate-900 tracking-tight">{tier.price}</span>
-                    {tier.period && <span className="text-sm font-semibold text-gray-400 ml-1">{tier.period}</span>}
+                    <span className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">{tier.price}</span>
+                    {tier.period && <span className="text-sm font-semibold text-gray-400 dark:text-slate-500 ml-1">{tier.period}</span>}
                   </div>
 
-                  <hr className="my-6 border-slate-100" />
+                  <hr className="my-6 border-slate-100 dark:border-slate-700" />
 
                   <ul className="space-y-3.5">
                     {tier.features.map((feature, fIdx) => (
-                      <li key={fIdx} className="flex items-start text-sm text-gray-600">
-                        <svg className="w-5 h-5 text-violet-500 flex-shrink-0 mr-2.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <li key={fIdx} className="flex items-start text-sm text-gray-600 dark:text-slate-300">
+                        <svg className="w-5 h-5 text-violet-500 dark:text-violet-400 flex-shrink-0 mr-2.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                         <span>{feature}</span>
@@ -218,22 +219,21 @@ export default function Pricing() {
 
                 <div className="mt-8">
                   {tier.isCurrent ? (
-                    <div className="w-full text-center bg-slate-100 text-slate-500 font-semibold py-3 px-4 rounded-xl text-sm border border-slate-200">
+                    <div className="w-full text-center bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold py-3 px-4 rounded-xl text-sm border border-slate-200 dark:border-slate-600 transition-colors">
                       {tier.cta}
                     </div>
                   ) : tier.onClick ? (
                     <button 
                       onClick={tier.onClick}
                       disabled={processingPlan !== null}
-                      className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-4 rounded-xl text-sm transition shadow-md disabled:opacity-50"
+                      className="w-full bg-violet-600 hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600 text-white font-bold py-3 px-4 rounded-xl text-sm transition shadow-md disabled:opacity-50 cursor-pointer border-0 outline-none"
                     >
-                      {/* 🔥 Dynamic per-button status update */}
                       {processingPlan === tier.id ? 'Processing Portal...' : tier.cta}
                     </button>
                   ) : (
                     <Link 
                       to={tier.link}
-                      className="block w-full text-center bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold py-3 px-4 rounded-xl text-sm border border-slate-200 transition text-decoration-none"
+                      className="block w-full text-center bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-950 text-slate-700 dark:text-slate-300 font-bold py-3 px-4 rounded-xl text-sm border border-slate-200 dark:border-slate-700 transition text-decoration-none"
                     >
                       {tier.cta}
                     </Link>

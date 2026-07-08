@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from './Navbar'; 
-import { Link, useNavigate } from 'react-router'; 
+import { Link, useNavigate } from 'react-router-dom'; 
 import axiosInstance from '../../../api/Axiosinstance';
 
 export default function UserDashboard() {
@@ -13,7 +13,7 @@ export default function UserDashboard() {
   const [documents, setDocuments] = useState([]);
   const [filterType, setFilterType] = useState('ALL');
 
-  // 🚀 NEW STATES: Track total entire database counts from paginated meta-data
+  // Track total entire database counts from paginated meta-data
   const [totalCount, setTotalCount] = useState(0);
   const [approvedCount, setApprovedCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
@@ -23,17 +23,12 @@ export default function UserDashboard() {
   useEffect(() => {
     const fetchList = async () => {
       try {
-        // Fetch all statuses to calculate overall metric summaries
         const response = await axiosInstance.get('documents/list/');
         
         if (response.data && response.data.results) {
-          // 🚀 FIX: Store only the paginated results chunk array into documents
           setDocuments(response.data.results);
-          
-          // 🚀 FIX: Extract absolute unfiltered counts from the backend pagination envelope
           setTotalCount(response.data.count || 0);
         } else {
-          // Fallback if backend pagination gets toggled off
           const dataArray = response.data || [];
           setDocuments(dataArray);
           setTotalCount(dataArray.length);
@@ -43,8 +38,6 @@ export default function UserDashboard() {
       }
     };
 
-    // 🚀 NEW METRIC TUNNEL: Fetches specific status total counts for the database view
-    // (Since standard pagination filters the main count, fetching these guarantees accurate metrics)
     const fetchSummaryMetrics = async () => {
       try {
         const [approvedRes, pendingRes, rejectedRes] = await Promise.all([
@@ -99,60 +92,59 @@ export default function UserDashboard() {
     return `${cleanType} ${labelSuffix}`;
   };
 
+  // 🚀 UPDATED: Badges now support dark backgrounds and clear text contrasting
   const getStatusBadge = (status) => {
     const badges = {
-      SUCCESS: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
-      REJECTED: 'bg-rose-50 text-rose-700 border-rose-200',
+      SUCCESS: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/50',
+      APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/50',
+      PENDING: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900/50',
+      REJECTED: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-900/50',
     };
     return `px-3 py-1 rounded-full text-xs font-semibold border ${badges[status] || badges.PENDING}`;
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50/50 flex flex-col">
+      <div className="min-h-screen bg-slate-50/50 dark:bg-slate-900 flex flex-col transition-colors duration-200">
         <Navbar />
         <div className="flex-1 flex justify-center items-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-violet-600" />
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-violet-600 dark:border-violet-400" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/50 text-slate-900 font-sans antialiased">
+    /* 🚀 FIXED: Root viewport shifts dynamically based on dark modes */
+    <div className="min-h-screen bg-slate-50/50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans antialiased transition-colors duration-200">
       <Navbar />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         
         {/* UPPER BANNER SECTION */}
         <div className="mb-10">
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Welcome, {user?.fullname || 'User'}</h1>
-          <p className="text-gray-500 mt-1">Upload your credentials, monitor ongoing audits, and view compliance status logs.</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Welcome, {user?.fullname || 'User'}</h1>
+          <p className="text-gray-500 dark:text-slate-400 mt-1">Upload your credentials, monitor ongoing audits, and view compliance status logs.</p>
         </div>
 
         {/* METRIC SUMMARIES */}
+        {/* 🚀 FIXED: Grids transition from white to slate-800 borders matching dark modes */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Total Documents Uploaded</p>
-            {/* 🚀 FIXED: Shows total count from full database instead of just page 1 array length */}
-            <p className="text-3xl font-bold text-slate-800 mt-2">{totalCount}</p>
+          <div className="bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 p-6 rounded-2xl shadow-sm transition-colors duration-200">
+            <p className="text-sm font-semibold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Total Documents Uploaded</p>
+            <p className="text-3xl font-bold text-slate-800 dark:text-white mt-2">{totalCount}</p>
           </div>
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Verified Secure</p>
-            {/* 🚀 FIXED: Shows database-wide approved totals */}
-            <p className="text-3xl font-bold text-emerald-600 mt-2">{approvedCount}</p>
+          <div className="bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 p-6 rounded-2xl shadow-sm transition-colors duration-200">
+            <p className="text-sm font-semibold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Verified Secure</p>
+            <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-2">{approvedCount}</p>
           </div>
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Pending</p>
-            {/* 🚀 FIXED: Shows database-wide pending totals */}
-            <p className="text-3xl font-bold text-amber-600 mt-2">{pendingCount}</p>
+          <div className="bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 p-6 rounded-2xl shadow-sm transition-colors duration-200">
+            <p className="text-sm font-semibold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Pending</p>
+            <p className="text-3xl font-bold text-amber-600 dark:text-amber-400 mt-2">{pendingCount}</p>
           </div>
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Rejected</p>
-            {/* 🚀 FIXED: Shows database-wide rejected totals */}
-            <p className="text-3xl font-bold text-rose-600 mt-2">{rejectedCount}</p>
+          <div className="bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 p-6 rounded-2xl shadow-sm transition-colors duration-200">
+            <p className="text-sm font-semibold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Rejected</p>
+            <p className="text-3xl font-bold text-rose-600 dark:text-rose-400 mt-2">{rejectedCount}</p>
           </div>
         </div>
 
@@ -167,16 +159,17 @@ export default function UserDashboard() {
         </div>
 
         {/* DATA FILTERING BAR & RECENT REVIEWS CONTAINER */}
-        <div className="bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+        {/* 🚀 FIXED: Table containers updated for high-density dark panel configurations */}
+        <div className="bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 shadow-sm rounded-2xl overflow-hidden transition-colors duration-200">
           
-          <div className="px-6 py-5 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
-            <h3 className="text-base font-bold text-slate-900">Recent Activity (Latest 3)</h3>
+          <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50 dark:bg-slate-900/20">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">Recent Activity</h3>
           </div>
 
           {/* TABLE PLATFORM */}
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-left">
-              <thead className="bg-slate-50/70 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            <table className="min-w-full divide-y divide-slate-100 dark:divide-slate-700 text-left">
+              <thead className="bg-slate-50/70 dark:bg-slate-900/40 text-xs font-semibold text-gray-400 dark:text-slate-400 uppercase tracking-wider">
                 <tr>
                   <th className="px-6 py-4">Document</th>
                   <th className="px-6 py-4">Type</th>
@@ -185,18 +178,18 @@ export default function UserDashboard() {
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-sm font-medium">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700 text-sm font-medium">
                 {filteredDocuments.slice(0, 3).map((doc) => (
-                  <tr key={doc.id} className="hover:bg-slate-50/80 transition">
-                    <td className="px-6 py-4 text-slate-900 whitespace-nowrap flex items-center space-x-2">
-                      <span className="truncate max-w-xs font-semibold text-slate-800">
+                  <tr key={doc.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors duration-150">
+                    <td className="px-6 py-4 text-slate-900 dark:text-slate-200 whitespace-nowrap flex items-center space-x-2">
+                      <span className="truncate max-w-xs font-semibold text-slate-800 dark:text-slate-200">
                         {generateDocumentLabel(doc)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-gray-400 font-mono text-xs">
+                    <td className="px-6 py-4 text-gray-400 dark:text-slate-400 font-mono text-xs">
                       {doc.document_type || 'GENERAL'}
                     </td>
-                    <td className="px-6 py-4 text-gray-500 whitespace-nowrap">
+                    <td className="px-6 py-4 text-gray-500 dark:text-slate-400 whitespace-nowrap">
                       {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : 'Just Now'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -207,7 +200,7 @@ export default function UserDashboard() {
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                       <button 
                         onClick={() => navigate(`/documents/${doc.id}`)}
-                        className="text-violet-600 hover:text-violet-900 font-bold transition-colors cursor-pointer"
+                        className="text-violet-600 dark:text-violet-400 hover:text-violet-900 dark:hover:text-violet-300 font-bold transition-colors cursor-pointer bg-transparent border-0 outline-none"
                       >
                         Details →
                       </button>
@@ -217,10 +210,10 @@ export default function UserDashboard() {
 
                 {/* THE VIEW ALL ROW */}
                 {totalCount > 0 && (
-                  <tr className="bg-slate-50/30 hover:bg-slate-50 transition-colors">
+                  <tr className="bg-slate-50/30 dark:bg-slate-900/10 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                     <td colSpan="5" className="px-6 py-3.5 text-center">
                       <Link to='/documents'
-                        className="inline-flex items-center space-x-1.5 text-xs font-bold uppercase tracking-wider text-violet-600 hover:text-violet-700 transition-colors"
+                        className="inline-flex items-center space-x-1.5 text-xs font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors text-decoration-none"
                       >
                         <span>View All Documents ({totalCount})</span>
                         <span>→</span>
@@ -233,7 +226,7 @@ export default function UserDashboard() {
           </div>
 
           {filteredDocuments.length === 0 && (
-            <div className="p-12 text-center text-gray-400 text-sm">
+            <div className="p-12 text-center text-gray-400 dark:text-slate-500 text-sm">
               No verification tasks found in your document log.
             </div>
           )}

@@ -1,1 +1,9 @@
-@import "tailwindcss";   
+@import "tailwindcss";
+
+/* 🚀 THE FIX FOR TAILWIND v4: Force the dark theme to watch for the .dark HTML class */
+@theme {
+  --animate-fadeIn: fadeIn 0.2s ease-out;
+}
+
+/* Explicitly tell Tailwind to map dark utility variants when .dark is on the HTML root tag */
+@custom-variant dark (&:where(.dark, .dark *));

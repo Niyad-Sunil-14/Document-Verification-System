@@ -146,64 +146,66 @@ export default function SubscriptionManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased relative">
+    /* 🚀 FIXED: Global dynamic layout adjustments for smooth light/dark theme tracking transforms */
+    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans antialiased relative transition-colors duration-200">
       <Navbar />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         
         {/* Page Header */}
         <div className="mb-10">
-          <h1 className="text-3xl font-black tracking-tight text-slate-900 uppercase">Your Subscription</h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">Manage your subscriptions, review historical subscriptions, and deploy renewals.</p>
+          <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white uppercase">Your Subscription</h1>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Manage your subscriptions, review historical subscriptions, and deploy renewals.</p>
         </div>
 
         {/* Dynamic Alerts Feedback */}
         {message && (
-          <div className="p-4 mb-6 bg-emerald-50 border border-emerald-200/60 text-emerald-800 text-xs font-semibold rounded-xl flex items-center gap-2 animate-fadeIn">
+          <div className="p-4 mb-6 bg-emerald-50 border border-emerald-200/60 dark:bg-emerald-950/30 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-400 text-xs font-semibold rounded-xl flex items-center gap-2 animate-fadeIn">
             <span>✨</span> {message}
           </div>
         )}
         {error && (
-          <div className="p-4 mb-6 bg-rose-50 border border-rose-200/60 text-rose-700 text-xs font-semibold rounded-xl flex items-center gap-2 shadow-sm animate-fadeIn">
+          <div className="p-4 mb-6 bg-rose-50 border border-rose-200/60 dark:bg-rose-950/30 dark:border-rose-900/40 text-rose-700 dark:text-rose-400 text-xs font-semibold rounded-xl flex items-center gap-2 shadow-sm animate-fadeIn">
             <span>⚠️</span> {error}
           </div>
         )}
 
         {loading ? (
-          <div className="bg-white rounded-2xl border border-slate-200 p-20 text-center shadow-sm flex flex-col items-center justify-center">
-            <div className="animate-spin rounded-full h-9 w-9 border-2 border-indigo-600 border-t-transparent mb-4" />
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Syncing database billing feeds...</p>
+          <div className="bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 rounded-2xl p-20 text-center shadow-sm flex flex-col items-center justify-center transition-colors">
+            <div className="animate-spin rounded-full h-9 w-9 border-2 border-indigo-600 dark:border-indigo-400 border-t-transparent mb-4" />
+            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Syncing database billing feeds...</p>
           </div>
         ) : (
           <div className="space-y-10">
             
             {/* PREMIUM HERO CONTAINER STATE CARD */}
-            <div className="bg-white border border-slate-200/80 shadow-md rounded-2xl p-6 relative overflow-hidden flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-indigo-50/60 via-purple-50/30 to-transparent rounded-bl-full -z-0 opacity-80" />
+            {/* 🚀 FIXED: Background layouts dynamically invert and hide graphic lines appropriately inside slate panels */}
+            <div className="bg-white border border-slate-200/80 dark:bg-slate-800 dark:border-slate-700 shadow-md rounded-2xl p-6 relative overflow-hidden flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 transition-colors">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-indigo-50/60 via-purple-50/30 dark:from-indigo-950/20 dark:via-purple-950/10 to-transparent rounded-bl-full -z-0 opacity-80" />
               
               <div className="space-y-1.5 relative z-10">
-                <span className="text-[10px] font-extrabold tracking-widest text-indigo-600 uppercase block">Active Plan</span>
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+                <span className="text-[10px] font-extrabold tracking-widest text-indigo-600 dark:text-indigo-400 uppercase block">Active Plan</span>
+                <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
                   {formatPlanDisplay(subscription?.plan_type)}
                   {subscription?.is_active && (
-                    <span className="px-2 py-0.5 text-[9px] font-black bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-md uppercase tracking-wider">
+                    <span className="px-2 py-0.5 text-[9px] font-black bg-emerald-50 border border-emerald-200 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/50 rounded-md uppercase tracking-wider">
                       Live
                     </span>
                   )}
                 </h2>
-                <p className="text-xs font-medium text-slate-500 max-w-md leading-relaxed">
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 max-w-md leading-relaxed">
                   {subscription?.is_active
                     ? `Premium privileges are fully enabled on this account. Your continuous processing limits will refresh on ${new Date(subscription.expires_at).toLocaleDateString('en-IN')}.`
                     : "Your profile is sitting on basic standard operational tier structures."}
                 </p>
               </div>
 
-              <div className="flex items-center gap-4 relative z-10 border-t sm:border-t-0 pt-4 sm:pt-0 border-slate-100">
+              <div className="flex items-center gap-4 relative z-10 border-t sm:border-t-0 pt-4 sm:pt-0 border-slate-100 dark:border-slate-700 w-full sm:w-auto">
                 {subscription?.is_active ? (
                   <button
                     disabled={actionLoading}
                     onClick={() => setIsCancelModalOpen(true)}
-                    className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 rounded-xl transition duration-150 cursor-pointer disabled:opacity-40 select-none shadow-sm"
+                    className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-700 dark:text-rose-400 rounded-xl transition duration-150 cursor-pointer disabled:opacity-40 select-none shadow-sm outline-none"
                   >
                     Cancel Membership
                   </button>
@@ -211,7 +213,7 @@ export default function SubscriptionManagement() {
                   <button
                     disabled={actionLoading}
                     onClick={() => navigate('/pricing')}
-                    className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md shadow-indigo-100 transition duration-150 cursor-pointer disabled:opacity-40 select-none"
+                    className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl shadow-md transition duration-150 cursor-pointer disabled:opacity-40 select-none outline-none border-0"
                   >
                     Activate Premium Pass
                   </button>
@@ -221,13 +223,13 @@ export default function SubscriptionManagement() {
 
             {/* HISTORICAL LIST SECTION */}
             <div className="space-y-4">
-              <div className="pb-2 border-b border-slate-200">
-                <h3 className="font-black text-slate-900 text-lg uppercase tracking-tight">Historical Passes</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Audit track containing every subscription iteration bound to this account framework.</p>
+              <div className="pb-2 border-b border-slate-200 dark:border-slate-700">
+                <h3 className="font-black text-slate-900 dark:text-white text-lg uppercase tracking-tight">Historical Passes</h3>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Audit track containing every subscription iteration bound to this account framework.</p>
               </div>
 
               {paymentHistory.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-slate-200 p-14 text-center text-xs text-slate-400 font-semibold shadow-inner">
+                <div className="bg-white rounded-2xl border border-slate-200 dark:bg-slate-800 dark:border-slate-700 p-14 text-center text-xs text-slate-400 font-semibold shadow-inner transition-colors">
                   No historical subscription logs located. Upgrade your active package.
                 </div>
               ) : (
@@ -242,67 +244,67 @@ export default function SubscriptionManagement() {
                     const isRowTrulyExpired = isTimeExpired || isNotTheLatestActiveRow;
                     
                     return (
+                      /* 🚀 FIXED: Inner table feeds display items with precise variable background tones */
                       <div 
                         key={pay.id}
-                        className="bg-white border border-slate-200/70 rounded-2xl p-5 shadow-sm hover:border-slate-300 transition-all duration-150 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+                        className="bg-white border border-slate-200/70 dark:bg-slate-800 dark:border-slate-700/80 rounded-2xl p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-150 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
                       >
                         {/* Info Block Left */}
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-2.5">
                             
-                            {/* 🚀 DYNAMIC COLOR STATUS DOT INDICATOR */}
                             <div className={`w-2 h-2 rounded-full shadow-sm ${
                               pay.status !== 'SUCCESS' 
                                 ? 'bg-rose-500' 
                                 : isRowTrulyExpired 
-                                ? 'bg-slate-300' 
+                                ? 'bg-slate-300 dark:bg-slate-600' 
                                 : 'bg-emerald-500 animate-pulse'
                             }`} />
 
-                            <h4 className="font-extrabold text-slate-800 text-sm">
+                            <h4 className="font-extrabold text-slate-800 dark:text-slate-200 text-sm">
                               {formatPlanDisplay(pay.plan_type)}
                             </h4>
-                            <span className="font-mono text-slate-400 text-[10px] bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                            <span className="font-mono text-slate-400 dark:text-slate-400 text-[10px] bg-slate-50 dark:bg-slate-900 px-2 py-0.5 rounded border border-slate-100 dark:border-slate-700">
                               #{pay.razorpay_order_id ? pay.razorpay_order_id.substring(6, 16) : pay.id}
                             </span>
                           </div>
                           
-                          <div className="flex items-center gap-5 text-xs text-slate-400 font-medium">
-                            <p>Purchased: <span className="text-slate-600 font-semibold">{new Date(pay.created_at).toLocaleDateString('en-IN')}</span></p>
-                            <p>Price: <span className="text-indigo-600 font-black">{formatToINR(pay.amount)}</span></p>
+                          <div className="flex items-center gap-5 text-xs text-slate-400 dark:text-slate-400 font-medium">
+                            <p>Purchased: <span className="text-slate-600 dark:text-slate-300 font-semibold">{new Date(pay.created_at).toLocaleDateString('en-IN')}</span></p>
+                            <p>Price: <span className="text-indigo-600 dark:text-indigo-400 font-black">{formatToINR(pay.amount)}</span></p>
                           </div>
                         </div>
 
                         {/* Status / Trigger Blocks Right */}
-                        <div className="flex items-center sm:justify-end gap-3 border-t sm:border-0 pt-3 sm:pt-0 border-slate-100">
+                        <div className="flex items-center sm:justify-end gap-3 border-t sm:border-0 pt-3 sm:pt-0 border-slate-100 dark:border-slate-700 w-full sm:w-auto">
                           {pay.status !== 'SUCCESS' ? (
                             <div className="flex items-center gap-2.5 w-full sm:w-auto">
-                              <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-100">
+                              <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-100 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-900/40">
                                 Failed
                               </span>
                               <button
                                 disabled={actionLoading}
                                 onClick={() => handleRenewSubscription(pay.plan_type.toLowerCase())}
-                                className="w-full sm:w-auto px-4 py-1.5 text-xs font-bold bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 border border-slate-200 hover:border-indigo-200 rounded-xl transition duration-150 cursor-pointer disabled:opacity-40 outline-none"
+                                className="w-full sm:w-auto px-4 py-1.5 text-xs font-bold bg-slate-50 dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 border border-slate-200 dark:border-slate-700 hover:border-indigo-200 rounded-xl transition duration-150 cursor-pointer disabled:opacity-40 outline-none"
                               >
                                 Try Again
                               </button>
                             </div>
                           ) : isRowTrulyExpired ? (
                             <div className="flex items-center gap-2.5 w-full sm:w-auto">
-                              <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-400 border border-slate-200/60">
+                              <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-400 border border-slate-200/60 dark:bg-slate-700/50 dark:text-slate-400 dark:border-transparent">
                                 Expired
                               </span>
                               <button
                                 disabled={actionLoading}
                                 onClick={() => handleRenewSubscription(pay.plan_type.toLowerCase())}
-                                className="w-full sm:w-auto px-4 py-1.5 text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition duration-150 cursor-pointer disabled:opacity-40 outline-none shadow-sm"
+                                className="w-full sm:w-auto px-4 py-1.5 text-xs font-bold bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-slate-200 text-white dark:text-slate-900 rounded-xl transition duration-150 cursor-pointer disabled:opacity-40 outline-none shadow-sm border-0"
                               >
                                 Renew Membership
                               </button>
                             </div>
                           ) : (
-                            <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100 animate-pulse">
+                            <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-transparent animate-pulse">
                               Running Active
                             </span>
                           )}
@@ -320,22 +322,23 @@ export default function SubscriptionManagement() {
       </main>
 
       {/* PREMIUM MODAL OVERLAY COMPONENT DIALOG PANEL */}
+      {/* 🚀 FIXED: Alert Modal elements updated to dark parameters with fine border separation controls */}
       {isCancelModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-2xl border border-slate-100 p-6 max-w-sm w-full shadow-2xl space-y-4">
+          <div className="bg-white border border-slate-100 dark:bg-slate-800 dark:border-slate-700 p-6 max-w-sm w-full shadow-2xl space-y-4 rounded-2xl transition-colors">
             <div className="flex items-center space-x-3 text-rose-500">
               <span className="text-2xl">⚠️</span>
-              <h3 className="text-base font-extrabold text-slate-900 uppercase tracking-tight">Cancel Subscription?</h3>
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white uppercase tracking-tight">Cancel Subscription?</h3>
             </div>
             
-            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
               Are you sure you want to turn off your {formatPlanDisplay(subscription?.plan_type)} subscription?
             </p>
 
             <div className="flex space-x-3 pt-2 text-xs font-bold">
               <button
                 onClick={() => setIsCancelModalOpen(false)}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition cursor-pointer outline-none border-0"
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl transition cursor-pointer outline-none border-0"
               >
                 Keep Plan
               </button>

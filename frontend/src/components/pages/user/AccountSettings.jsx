@@ -6,18 +6,25 @@ import axiosInstance from '../../../api/Axiosinstance';
 export default function AccountSettings() {
   const navigate = useNavigate();
   
+  // 🚀 OPTIMIZATION FIXED: Parse the localStorage theme state synchronously on initial boot 
+  // This completely prevents the light mode flashing effect before data initialization loads
+  const [preferences, setPreferences] = useState(() => {
+    const savedPrefs = localStorage.getItem('user_workspace_settings_prefs');
+    if (savedPrefs) {
+      return JSON.parse(savedPrefs);
+    }
+    return {
+      darkMode: false,
+      emailNotifications: true,
+      autoDownloadAnalysis: false,
+    };
+  });
+
   // 1. STATE CONFIGURATION
   const [subscription, setSubscription] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ text: '', isError: false });
-
-  // 🚀 SIMPLIFIED PREFERENCES: Light vs Dark mode setup
-  const [preferences, setPreferences] = useState({
-    darkMode: false,
-    emailNotifications: true,
-    autoDownloadAnalysis: false,
-  });
 
   // 2. DATA INITIALIZATION
   useEffect(() => {
@@ -30,12 +37,6 @@ export default function AccountSettings() {
         ]);
         setSubscription(subRes.data);
         setProfile(profileRes.data);
-
-        // Load theme configuration preference cache
-        const savedPrefs = localStorage.getItem('user_workspace_settings_prefs');
-        if (savedPrefs) {
-          setPreferences(JSON.parse(savedPrefs));
-        }
       } catch (err) {
         console.error("Failed to parse configurations context:", err);
         setMessage({
@@ -56,7 +57,6 @@ export default function AccountSettings() {
     setPreferences(updatedPrefs);
     localStorage.setItem('user_workspace_settings_prefs', JSON.stringify(updatedPrefs));
     
-    setMessage({ text: '⚙️ Account workspace parameters updated.', isError: false });
     setTimeout(() => setMessage({ text: '', isError: false }), 2000);
 
     // Apply or remove dark theme configuration directly to the root DOM layer
@@ -88,18 +88,9 @@ export default function AccountSettings() {
           <p className="text-sm font-medium text-slate-500 mt-1">Configure workspace environment layouts, personalize interface themes, and track subscription scopes.</p>
         </div>
 
-        {/* Action Message Bar */}
-        {message.text && (
-          <div className={`p-4 mb-8 rounded-xl border text-xs font-semibold shadow-sm flex items-center gap-2 ${
-            message.isError ? 'bg-rose-50 border-rose-200/60 text-rose-700' : 'bg-emerald-50 border-emerald-200/60 text-emerald-800'
-          }`}>
-            <span>{message.isError ? '⚠️' : '✨'}</span>
-            <span>{message.text}</span>
-          </div>
-        )}
-
         {loading ? (
-          <div className={`rounded-2xl border p-20 text-center shadow-sm flex flex-col items-center justify-center ${
+          /* 🚀 FIXED: The loading container now reliably references the correct initial synchronous dark mode check */
+          <div className={`rounded-2xl border p-20 text-center shadow-sm flex flex-col items-center justify-center transition-colors duration-200 ${
             preferences.darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
           }`}>
             <div className={`animate-spin rounded-full h-8 w-8 border-b-2 mb-4 ${
@@ -150,7 +141,7 @@ export default function AccountSettings() {
                 </div>
 
                 <div className="space-y-5">
-                  {/* 🚀 LIGHT / DARK OPTION TOGGLE SWITCH */}
+                  {/* LIGHT / DARK OPTION TOGGLE SWITCH */}
                   <div className={`flex items-center justify-between pb-4 border-b ${
                     preferences.darkMode ? 'border-slate-700' : 'border-slate-100'
                   }`}>
@@ -165,8 +156,8 @@ export default function AccountSettings() {
                         preferences.darkMode ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-800'
                       }`}
                     >
-                      <option value="light">☀️ Light Option</option>
-                      <option value="dark">🌙 Dark Option</option>
+                      <option value="light">☀️ Day Mode</option>
+                      <option value="dark">🌙 Night Mode</option>
                     </select>
                   </div>
 
