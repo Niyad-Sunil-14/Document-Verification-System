@@ -48,7 +48,7 @@ class AdminTokenObtainSerializer(TokenObtainPairSerializer):
         data = super().validate(attrs)
         
         if self.user.role != 'ADMIN':
-            raise AuthenticationFailed(detail="Access denied. Admin privileges required.")
+            raise AuthenticationFailed(detail="Access denied. Only Admin can authenticate.")
         
         data['fullname'] = getattr(self.user, 'fullname', '')
         data['role'] = self.user.role

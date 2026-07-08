@@ -13,14 +13,51 @@ export default function UserDashboard() {
   const [documents, setDocuments] = useState([]);
   const [filterType, setFilterType] = useState('ALL');
 
+  // 🚀 NEW STATES: Track total entire database counts from paginated meta-data
+  const [totalCount, setTotalCount] = useState(0);
+  const [approvedCount, setApprovedCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [rejectedCount, setRejectedCount] = useState(0);
+
   // 2. INGESTION MATRIX
   useEffect(() => {
     const fetchList = async () => {
       try {
+        // Fetch all statuses to calculate overall metric summaries
         const response = await axiosInstance.get('documents/list/');
-        setDocuments(response.data.results || response.data || []);
+        
+        if (response.data && response.data.results) {
+          // 🚀 FIX: Store only the paginated results chunk array into documents
+          setDocuments(response.data.results);
+          
+          // 🚀 FIX: Extract absolute unfiltered counts from the backend pagination envelope
+          setTotalCount(response.data.count || 0);
+        } else {
+          // Fallback if backend pagination gets toggled off
+          const dataArray = response.data || [];
+          setDocuments(dataArray);
+          setTotalCount(dataArray.length);
+        }
       } catch (err) {
         console.error("Dashboard table collection fetch failed:", err);
+      }
+    };
+
+    // 🚀 NEW METRIC TUNNEL: Fetches specific status total counts for the database view
+    // (Since standard pagination filters the main count, fetching these guarantees accurate metrics)
+    const fetchSummaryMetrics = async () => {
+      try {
+        const [approvedRes, pendingRes, rejectedRes] = await Promise.all([
+          axiosInstance.get('documents/list/?status=APPROVED'),
+          axiosInstance.get('documents/list/?status=PENDING'),
+          axiosInstance.get('documents/list/?status=REJECTED')
+        ]);
+        
+        setApprovedCount(approvedRes.data.count ?? approvedRes.data.length ?? 0);
+        setPendingCount(pendingRes.data.count ?? pendingRes.data.length ?? 0);
+        setRejectedCount(rejectedRes.data.count ?? rejectedRes.data.length ?? 0);
+      } catch (err) {
+        console.error("Failed pulling cross-sectional metrics loops:", err);
       }
     };
 
@@ -39,22 +76,18 @@ export default function UserDashboard() {
     
     fetchUserProfile();
     fetchList();
+    fetchSummaryMetrics();
   }, []);
 
-  // 3. FILTER CONDITIONAL LOGIC
+  // 3. FILTER CONDITIONAL LOGIC (For the localized table preview)
   const filteredDocuments = documents.filter((doc) => {
     if (filterType === 'ALL') return true;
     return doc.status === filterType;
   });
 
-  // 🔥 NEW SUGGESTION: Dynamic Human-Readable Title Generator
   const generateDocumentLabel = (doc) => {
     if (!doc) return "Document Resource";
-    
-    // Fall back to general if no specific type is assigned yet
     const typeRaw = doc.document_type || "GENERAL";
-    
-    // Formats uppercase snake_case (e.g., 'DRIVING_LICENSE' -> 'Driving License')
     const cleanType = typeRaw
       .replace(/_/g, ' ')
       .toLowerCase()
@@ -66,7 +99,6 @@ export default function UserDashboard() {
     return `${cleanType} ${labelSuffix}`;
   };
 
-  // Dynamic Badge Color Utility
   const getStatusBadge = (status) => {
     const badges = {
       SUCCESS: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -104,25 +136,23 @@ export default function UserDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Total Documents Uploaded</p>
-            <p className="text-3xl font-bold text-slate-800 mt-2">{documents.length}</p>
+            {/* 🚀 FIXED: Shows total count from full database instead of just page 1 array length */}
+            <p className="text-3xl font-bold text-slate-800 mt-2">{totalCount}</p>
           </div>
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Verified Secure</p>
-            <p className="text-3xl font-bold text-emerald-600 mt-2">
-              {documents.filter(d => d.status === 'SUCCESS' || d.status === 'APPROVED').length}
-            </p>
+            {/* 🚀 FIXED: Shows database-wide approved totals */}
+            <p className="text-3xl font-bold text-emerald-600 mt-2">{approvedCount}</p>
           </div>
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Pending</p>
-            <p className="text-3xl font-bold text-amber-600 mt-2">
-              {documents.filter(d => d.status === 'PENDING').length}
-            </p>
+            {/* 🚀 FIXED: Shows database-wide pending totals */}
+            <p className="text-3xl font-bold text-amber-600 mt-2">{pendingCount}</p>
           </div>
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Rejected</p>
-            <p className="text-3xl font-bold text-rose-600 mt-2">
-              {documents.filter(d => d.status === 'REJECTED').length}
-            </p>
+            {/* 🚀 FIXED: Shows database-wide rejected totals */}
+            <p className="text-3xl font-bold text-rose-600 mt-2">{rejectedCount}</p>
           </div>
         </div>
 
@@ -140,7 +170,7 @@ export default function UserDashboard() {
         <div className="bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden">
           
           <div className="px-6 py-5 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
-            <h3 className="text-base font-bold text-slate-900">Recent Activity</h3>
+            <h3 className="text-base font-bold text-slate-900">Recent Activity (Latest 3)</h3>
           </div>
 
           {/* TABLE PLATFORM */}
@@ -159,7 +189,6 @@ export default function UserDashboard() {
                 {filteredDocuments.slice(0, 3).map((doc) => (
                   <tr key={doc.id} className="hover:bg-slate-50/80 transition">
                     <td className="px-6 py-4 text-slate-900 whitespace-nowrap flex items-center space-x-2">
-                      {/* 🔥 FIXED: Outputs the generated human label directly instead of a hash filename */}
                       <span className="truncate max-w-xs font-semibold text-slate-800">
                         {generateDocumentLabel(doc)}
                       </span>
@@ -168,7 +197,7 @@ export default function UserDashboard() {
                       {doc.document_type || 'GENERAL'}
                     </td>
                     <td className="px-6 py-4 text-gray-500 whitespace-nowrap">
-                      {doc.uploaded_at || 'Just Now'}
+                      {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : 'Just Now'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={getStatusBadge(doc.status)}>
@@ -187,13 +216,13 @@ export default function UserDashboard() {
                 ))}
 
                 {/* THE VIEW ALL ROW */}
-                {filteredDocuments.length > 0 && (
+                {totalCount > 0 && (
                   <tr className="bg-slate-50/30 hover:bg-slate-50 transition-colors">
                     <td colSpan="5" className="px-6 py-3.5 text-center">
                       <Link to='/documents'
                         className="inline-flex items-center space-x-1.5 text-xs font-bold uppercase tracking-wider text-violet-600 hover:text-violet-700 transition-colors"
                       >
-                        <span>View All Documents</span>
+                        <span>View All Documents ({totalCount})</span>
                         <span>→</span>
                       </Link>
                     </td>
@@ -203,7 +232,6 @@ export default function UserDashboard() {
             </table>
           </div>
 
-          {/* Zero Data State Handling */}
           {filteredDocuments.length === 0 && (
             <div className="p-12 text-center text-gray-400 text-sm">
               No verification tasks found in your document log.

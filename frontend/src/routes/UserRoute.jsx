@@ -10,6 +10,7 @@ import PaymentHistory from '../components/pages/user/PaymentHistory'
 import PaymentDetails from '../components/pages/user/PaymentDetails'
 import SubscriptionManagement from '../components/pages/user/SubscriptionManagement'
 import UserDashboard from '../components/pages/user/UserDashboard'
+import AccountSettings from '../components/pages/user/AccountSettings'
 
 function UserRoute() {
   return (
@@ -80,6 +81,12 @@ function UserRoute() {
             } 
           />
 
+          <Route path="/settings" element={
+              <ProtectedRoute allowedRoles={['USER']}>
+                <AccountSettings />
+              </ProtectedRoute>
+            } 
+          />
     </>
   )
 }

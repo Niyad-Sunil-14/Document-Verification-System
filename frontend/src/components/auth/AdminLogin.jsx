@@ -36,12 +36,10 @@ const AdminLogin = () => {
         
         {/* Left Side: Darker Branding Area */}
         <div className="md:w-1/2 bg-slate-800 flex flex-col items-center justify-center p-8 text-white text-center">
-          <div className="mb-6 p-4 bg-slate-700 rounded-full shadow-inner">
-            <svg className="h-12 w-12 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          <div className="mb-7 p-2.5 bg-slate-700 rounded-full shadow-inner">
+              <img src="/logo.png" alt="icon" className="w-full h-auto object-contain max-w-[110px]"/>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">Admin Portal</h1>
+          <h1 className="text-3xl font-bold tracking-tight">DocVerify Admin Portal</h1>
           <p className="mt-4 text-slate-400 text-sm max-w-xs">
             Unauthorized access is strictly prohibited. Restricted to system administrators only.
           </p>
@@ -50,10 +48,10 @@ const AdminLogin = () => {
         {/* Right Side: Form Area */}
         <div className="md:w-1/2 bg-white p-10 flex flex-col justify-center">
           <div className="mb-8">
-            <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">
+            {/* <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">
               Secure Access
-            </span>
-            <h2 className="text-2xl font-bold text-gray-900 mt-2">Administrator Sign-In</h2>
+            </span> */}
+            <h2 className="text-2xl font-bold text-gray-900 mt-2">Admin Sign-In</h2>
           </div>
           
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
@@ -71,7 +69,7 @@ const AdminLogin = () => {
               <input
                 {...register("email", { required: "Admin email is required" })}
                 type="email"
-                placeholder="admin@docverify.com"
+                placeholder="Email"
                 className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all placeholder-gray-400 ${
                   errors.email || serverError ? 'border-red-500 bg-red-50' : 'border-gray-300'
                 }`}
@@ -89,7 +87,7 @@ const AdminLogin = () => {
                 <input
                   {...register("password", { required: "Password is required" })}
                   type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
+                  placeholder="Password"
                   className={`w-full pl-4 pr-12 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all placeholder-gray-400 ${
                     errors.password || serverError ? 'border-red-500 bg-red-50' : 'border-gray-300'
                   }`}
@@ -121,7 +119,7 @@ const AdminLogin = () => {
                 isSubmitting ? 'bg-slate-400 cursor-not-allowed' : 'bg-slate-800 hover:bg-slate-900 active:scale-[0.98]'
               }`}
             >
-              {isSubmitting ? 'Verifying Credentials...' : 'Authenticate'}
+              {isSubmitting ? 'Loging in...' : 'Login'}
             </button>
 
             <div className="text-center mt-6">
