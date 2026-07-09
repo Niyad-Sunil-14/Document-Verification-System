@@ -6,7 +6,6 @@ import axiosInstance from '../../../api/Axiosinstance';
 export default function MyDocument() {
   const navigate = useNavigate();
 
-  // 1. STATE MANAGEMENT
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [backgroundLoading, setBackgroundLoading] = useState(false); 
