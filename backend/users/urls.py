@@ -27,4 +27,6 @@ urlpatterns = [
     path('admin/users/', AdminAllUsersView.as_view(), name='admin-all-users'),
     path('admin/users/<int:id>/', AdminUserDetailsView.as_view(), name='admin-user-details'),
 
+    #Support
+    path('support/', SupportCreateView.as_view(), name='create-support-ticket'),
 ]

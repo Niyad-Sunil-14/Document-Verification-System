@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from . models import CustomUser
+from . models import CustomUser,Support
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
 from documents.models import Document,Payment
@@ -144,3 +144,14 @@ class UserAdminSerializer(serializers.ModelSerializer):
             representation['payments'] = UserPaymentLogSerializer(user_payments, many=True).data
             
         return representation
+    
+
+
+
+
+
+class SupportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Support
+        fields = ['id', 'subject', 'category', 'message_text', 'is_resolved', 'created_at']
+        read_only_fields = ['id', 'is_resolved', 'created_at']

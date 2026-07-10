@@ -58,3 +58,22 @@ class CustomUser(AbstractUser):
     
 
 
+
+
+class Support(models.Model):
+    CATEGORY_CHOICES = [
+        ('TECHNICAL', 'Technical Glitch'),
+        ('BILLING', 'Payment & Billings'),
+        ('ACCOUNT', 'Account Access Profile'),
+        ('OTHER', 'Miscellaneous Concerns'),
+    ]
+
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='support_tickets')
+    subject = models.CharField(max_length=255)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='TECHNICAL')
+    message_text = models.TextField()
+    is_resolved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.category} - {self.subject} ({self.user.email})"

@@ -131,6 +131,30 @@ export default function UserProfile() {
     }
   };
 
+  // 🚀 RESTORED FIXED FUNCTION: Resolves submission ReferenceErrors on Password Mutation tabs
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault();
+    if (passwordData.new_password !== passwordData.confirm_password) {
+      setActionMessage({ text: '⚠️ New password keys do not match your confirmation parameters.', isError: true });
+      return;
+    }
+    try {
+      setIsSaving(true);
+      setActionMessage({ text: '', isError: false });
+      await axiosInstance.put('users/change-password/', {
+        old_password: passwordData.old_password,
+        new_password: passwordData.new_password
+      });
+      setPasswordData({ old_password: '', new_password: '', confirm_password: '' });
+      setActionMessage({ text: '🛡️ Password updated successfully!', isError: false });
+    } catch (err) {
+      console.error("Password mutation failed:", err);
+      setActionMessage({ text: err.response?.data?.detail || 'Failed to modify credentials.', isError: true });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (actionMessage.text && !isOtpStep) {
       const timer = setTimeout(() => setActionMessage({ text: '', isError: false }), 4000);
@@ -170,7 +194,6 @@ export default function UserProfile() {
   }
 
   return (
-    /* 🚀 FIXED: Dynamic canvas layer matches system dark option variables */
     <div className="min-h-screen bg-slate-50/50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans antialiased transition-colors duration-200">
       <Navbar />
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
