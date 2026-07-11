@@ -17,10 +17,10 @@ import random
 import logging
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 import cloudinary.uploader
-from google import genai
-from google.genai import types
 import os
 from django.conf import settings
+from groq import Groq 
+
 # Create your views here.
 
 User = get_user_model()
@@ -398,44 +398,58 @@ class AIChatBotView(APIView):
             )
 
         try:
-            api_key = getattr(settings, 'GEMINI_API_KEY', os.environ.get('GEMINI_API_KEY'))
+            # Safely grab the key from settings or standard environment
+            api_key = getattr(settings, 'GROQ_API_KEY', os.environ.get('GROQ_API_KEY'))
+            
             if not api_key:
                 return Response(
-                    {"detail": "Backend configuration missing: Gemini API Key not found."},
+                    {"detail": "Backend configuration missing: Groq API Key not found."},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
 
-            client = genai.Client(api_key=api_key)
+            # Initialize the Groq core client instance
+            client = Groq(api_key=api_key)
 
-            response = client.models.generate_content(
-                model='gemini-3.5-flash',
-                contents=user_message,
-                config=types.GenerateContentConfig(
-                    system_instruction=(
-                        "You are 'DocVerify Bot', a helpful assistant for the DocVerify platform. "
-                        "Your goal is to provide extremely friendly, scannable, and user-focused instructions.\n\n"
-                        
-                        "🚨 USER PERSPECTIVE & TERMINOLOGY CONSTRAINTS:\n"
-                        "- NEVER mention technical routing URL endpoints like '/upload', '/settings', '/pricing', or '/subscription'.\n"
-                        "- Always refer to pages by their human-readable UI names: 'Upload Page', 'Account Settings Panel', 'Pricing Page', or 'Subscription Hub'.\n"
-                        "- Keep responses crisp, short, and split apart with empty whitespace lines.\n"
-                        "- Use clean bullet points and emojis to make layouts highly readable.\n\n"
-                        
-                        "📂 APPLICATION NAVIGATION RULES TO USE:\n"
-                        "1. HOW TO UPLOAD/VERIFY A DOCUMENT: Instruct the user to open the navigation menu and click 'Upload Page' (or 'Upload / Verify'). Select the document type dropdown (like Invoice or Passport Scan), select or drag the PDF/Image file (max 10MB), and click the 'Submit' button. Note that it consumes 1 credit token automatically, or opens the secure Razorpay payment checkout pop-up window if their wallet balance is empty.\n"
-                        "2. WALLET CREDITS & PACKAGES: Single document scans cost a pay-as-you-go rate of ₹49. Users can buy bulk credits on the 'Pricing Page' or manage active recurring memberships (Starter Pack or Monthly Premium Pass) inside the 'Subscription Hub'.\n"
-                        "3. USER PROFILE MANAGEMENT: Users can modify their full name, change login email credentials (which sends a 6-digit confirmation OTP to their new inbox), or instantly flip between Light and Dark interface modes inside the 'Account Settings Panel'."
-                    ),
-                    max_output_tokens=800, 
-                    temperature=0.3, 
-                )
+            # 🚀 Execute the chat generation using Llama 3.1 8B Instant
+            chat_completion = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are 'DocVerify Bot', a helpful customer assistant for the DocVerify app. "
+                            "Your goal is to provide extremely friendly, scannable, and user-focused instructions.\n\n"
+                            
+                            "🚨 VISUAL DESIGN & TERMINOLOGY RULES:\n"
+                            "- NEVER mention technical routing URL paths like '/upload' or '/settings'.\n"
+                            "- Always refer to interfaces by their human names: 'Upload Page', 'Account Settings Panel', 'Pricing Page', or 'Subscription Hub'.\n"
+                            "- Keep descriptions ultra-short, crisp, and separate ideas with clean empty spacing lines.\n"
+                            "- Use bullet points and functional emojis to make reading clear.\n\n"
+                            
+                            "📂 PLATFORM CONTEXT GUIDE:\n"
+                            "1. HOW TO UPLOAD DOCUMENTS: Go to the 'Upload Page' -> Choose type dropdown (Invoice, Passport Scan) -> Ingest file (PDF or Image under 10MB) -> Click 'Submit'. Note: Deducts 1 credit token automatically, or launches a ₹49 Razorpay payment modal if balance is empty.\n"
+                            "2. WALLET SYSTEM PACKAGES: Pay-as-you-go scans cost ₹49/file. Monthly membership tiers include the Starter Pack (₹99 for 3 credits) and Premium Pass (₹299 for 12 credits). Managed inside the 'Pricing Page' and 'Subscription Hub'.\n"
+                            "3. OPTIONS: Change account full name details, update active email logins (requires a 6-digit verification code token sent to the new inbox), or change themes between Light and Dark visibility configurations via the 'Account Settings Panel'."
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": user_message
+                    }
+                ],
+                max_tokens=500,
+                # Low temperature ensures it strictly follows the formatting rules
+                temperature=0.2, 
             )
+
+            # Extract the raw response text from the Llama output structure
+            ai_text = chat_completion.choices[0].message.content
             
-            return Response({"text": response.text}, status=status.HTTP_200_OK)
-            
+            return Response({"text": ai_text}, status=status.HTTP_200_OK)
+
         except Exception as e:
-            print(f"Gemini API execution failure: {str(e)}")
+            print(f"Groq Cloud API connection error: {str(e)}")
             return Response(
-                {"detail": "AI assistant engine is currently unavailable."}, 
+                {"detail": "AI support network is temporarily unavailable."}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
