@@ -29,4 +29,6 @@ urlpatterns = [
 
     #Support
     path('support/', SupportCreateView.as_view(), name='create-support-ticket'),
+    path('support/chat/', AIChatBotView.as_view(), name='support-ai-chat'),
+
 ]

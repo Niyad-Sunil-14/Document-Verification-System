@@ -22,15 +22,15 @@ export default function Support() {
   ]);
   const [botTyping, setBotTyping] = useState(false);
   
-  const messagesEndRef = useRef(null);
+  // Ref hooked to the inner scrolling element box
+  const chatScrollContainerRef = useRef(null);
 
-  // 🚀 FIXED: Only scroll if there is more than the 1 initial welcome message!
-  // This guarantees zero page jumps on load, regardless of auth or parent component re-renders.
+  // 🚀 FIXED: Inner-container scroll lock engine instead of page window jumps
   useEffect(() => {
-    if (chatMessages.length > 1 && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (chatScrollContainerRef.current) {
+      chatScrollContainerRef.current.scrollTop = chatScrollContainerRef.current.scrollHeight;
     }
-  }, [chatMessages]);
+  }, [chatMessages, botTyping]);
 
   const handleTicketChange = (e) => {
     const { name, value } = e.target;
@@ -53,8 +53,6 @@ export default function Support() {
       setTicketData({ subject: '', category: 'TECHNICAL', messageText: '' });
     } catch (err) {
       console.error("Form submission crash:", err);
-      
-      // ✅ Fixed Catch Case: Pull error message from backend response, keep form data intact, set red alert banner
       setMessage({ 
         text: err.response?.data?.detail || 'Failed to submit enquiry. Please check your network and try again.', 
         isError: true 
@@ -69,33 +67,29 @@ export default function Support() {
     if (!chatInput.trim()) return;
 
     const userMessage = chatInput.trim();
+    
     setChatMessages((prev) => [...prev, { id: Date.now(), text: userMessage, sender: 'USER' }]);
     setChatInput('');
     setBotTyping(true);
 
-    setTimeout(() => {
-      let aiText = "I encountered an unmapped inquiry keyword string. Could you clarify if your question relates to your available credits wallet, profile re-verification rules, or active subscription processing queues?";
-      const msgLower = userMessage.toLowerCase();
+    try {
+      const response = await axiosInstance.post('support/chat/', {
+        user_message: userMessage
+      });
 
-      if (msgLower.includes('credit') || msgLower.includes('token') || msgLower.includes('balance') || msgLower.includes('deduct')) {
-        aiText = "Every document verification attempt deducts 1 credit token from your profile pool. If your balance hits zero, the ingestion engine falls back to standard single-pay processing (₹49 per validation). You can top up tokens dynamically via the Pricing tier matrix.";
-      } else if (msgLower.includes('reject') || msgLower.includes('fail') || msgLower.includes('remark') || msgLower.includes('wrong') || msgLower.includes('reason')) {
-        aiText = "Document rejections are logged by administrative auditors when files are blurry or mismatched. Navigate to 'My Documents', open your specific file's details, read the custom notice under 'Remarks', and click 'Re-Upload' to resubmit a clean document scan.";
-      } else if (msgLower.includes('premium') || msgLower.includes('plan') || msgLower.includes('subscription') || msgLower.includes('membership') || msgLower.includes('starter')) {
-        aiText = "DocVerify features two bundled contracts: Starter Pack (₹99/mo for 3 tokens) and Monthly Premium Pass (₹299/mo for 12 tokens). Subscriptions activate automatically. If you wish to turn off recurring charges, use the 'Cancel Membership' option inside your Subscription Hub window.";
-      } else if (msgLower.includes('pay') || msgLower.includes('payment') || msgLower.includes('razorpay') || msgLower.includes('checkout') || msgLower.includes('money') || msgLower.includes('order')) {
-        aiText = "Our billing pipelines run via Razorpay. If your browser window closes prematurely during checkout, our backend catches the drop and records a tracking log under 'Failed' inside your Payment History. If funds were debited without token allocation, please submit an enquiry form.";
-      } else if (msgLower.includes('profile') || msgLower.includes('email') || msgLower.includes('otp') || msgLower.includes('code') || msgLower.includes('verify')) {
-        aiText = "To modify your account values, open your Profile tab. If you alter your login email string, our security firewall initiates a multi-step update loop: look for a 6-digit confirmation code token in your new inbox and enter it to apply changes safely.";
-      } else if (msgLower.includes('ubuntu') || msgLower.includes('linux') || msgLower.includes('dark') || msgLower.includes('theme') || msgLower.includes('system') || msgLower.includes('node')) {
-        aiText = "Our platform is fully optimized for modern cross-platform browser instances (including standard Ubuntu Linux setups). You can control dark and light modes through your Account Settings preference toggles, which instantly adjust our Tailwind v4 core layers.";
-      } else if (msgLower.includes('hi') || msgLower.includes('hello') || msgLower.includes('hey') || msgLower.includes('support')) {
-        aiText = "Hello! I am ready to process your questions. You can ask me details regarding: 'How do subscriptions work?', 'Why was my document rejected?', 'Where do I purchase extra credit tokens?', or how to verify an updated profile email address.";
-      }
-
-      setChatMessages((prev) => [...prev, { id: Date.now() + 1, text: aiText, sender: 'BOT' }]);
+      setChatMessages((prev) => [
+        ...prev, 
+        { id: Date.now() + 1, text: response.data.text, sender: 'BOT' }
+      ]);
+    } catch (err) {
+      console.error("Django AI router dropped handshake:", err);
+      setChatMessages((prev) => [
+        ...prev, 
+        { id: Date.now() + 1, text: "⚠️ Unable to parse AI response. Please check your system connections.", sender: 'BOT' }
+      ]);
+    } finally {
       setBotTyping(false);
-    }, 800);
+    }
   };
 
   const faqData = [
@@ -119,20 +113,8 @@ export default function Support() {
         {/* Page Head */}
         <div className="mb-10">
           <h1 className="text-3xl font-black tracking-tight uppercase">Help & Support</h1>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Resolve system inquiries, open technical assistance pipelines, or chat with our automated AI assistant.</p>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Resolve system inquiries, open technical assistance, or chat with our automated AI assistant for any help.</p>
         </div>
-
-        {/* Global Messaging Notifications Alert banner */}
-        {message.text && (
-          <div className={`p-4 mb-8 rounded-xl border text-xs font-semibold shadow-sm flex items-center justify-center gap-2 ${
-            message.isError 
-              ? 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/20 dark:border-rose-900/40 dark:text-rose-400' 
-              : 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-900/40 dark:text-emerald-400'
-          }`}>
-            <span>{message.isError ? '⚠️' : '✨'}</span>
-            <span>{message.text}</span>
-          </div>
-        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
@@ -167,6 +149,18 @@ export default function Support() {
                 )}
               </div>
             </div>
+
+            {/* Global Messaging Notifications Alert banner */}
+            {message.text && (
+              <div className={`p-4 mb-8 rounded-xl border text-xs font-semibold shadow-sm flex items-center justify-center gap-2 ${
+                message.isError 
+                  ? 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/20 dark:border-rose-900/40 dark:text-rose-400' 
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-900/40 dark:text-emerald-400'
+              }`}>
+                <span>{message.isError ? '⚠️' : '✨'}</span>
+                <span>{message.text}</span>
+              </div>
+            )}
 
             {/* LODGE SUPPORT TICKET CONSOLE */}
             <div className="bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 shadow-sm rounded-2xl p-6 transition-colors duration-200">
@@ -239,12 +233,16 @@ export default function Support() {
               <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <span className="w-2.5 h-2.5 bg-violet-500 rounded-full animate-pulse" />
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">AI Assistant Node</h3>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">AI Assistant</h3>
                 </div>
                 <span className="text-[10px] font-bold text-gray-400 bg-slate-100 dark:bg-slate-900 px-2 py-0.5 rounded border dark:border-slate-700 font-mono">v4-Live</span>
               </div>
 
-              <div className="flex-1 p-5 overflow-y-auto space-y-4 bg-slate-50/20 dark:bg-slate-900/10 max-h-[410px]">
+              {/* 🚀 FIXED CONTAINER BOX: Real-time overflow bounds scrolling logic */}
+              <div 
+                ref={chatScrollContainerRef}
+                className="flex-1 p-5 overflow-y-auto space-y-4 bg-slate-50/20 dark:bg-slate-900/10 max-h-[410px] scrollbar-thin"
+              >
                 {chatMessages.map((msg) => (
                   <div key={msg.id} className={`flex ${msg.sender === 'USER' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
                     <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs leading-relaxed font-medium shadow-xs border ${
@@ -253,7 +251,9 @@ export default function Support() {
                         : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-none'
                     }`}>
                       {msg.sender === 'BOT' && <span className="block font-black text-[9px] uppercase tracking-wider text-violet-500 mb-0.5">DocVerify Bot</span>}
-                      <p className={msg.sender === 'USER' ? 'font-semibold' : ''}>{msg.text}</p>
+                      <p className={`${msg.sender === 'USER' ? 'font-semibold' : ''} whitespace-pre-line`}>
+                        {msg.text}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -269,7 +269,6 @@ export default function Support() {
                     </div>
                   </div>
                 )}
-                <div ref={messagesEndRef} />
               </div>
 
               <form onSubmit={handleSendMessage} className="p-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 flex items-center gap-2 transition-colors duration-200">

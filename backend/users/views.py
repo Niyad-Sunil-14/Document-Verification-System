@@ -17,6 +17,10 @@ import random
 import logging
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 import cloudinary.uploader
+from google import genai
+from google.genai import types
+import os
+from django.conf import settings
 # Create your views here.
 
 User = get_user_model()
@@ -377,3 +381,61 @@ class SupportCreateView(APIView):
             serializer.save(user=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+
+
+class AIChatBotView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user_message = request.data.get('user_message')
+        
+        if not user_message:
+            return Response(
+                {"detail": "Message body cannot be empty."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            api_key = getattr(settings, 'GEMINI_API_KEY', os.environ.get('GEMINI_API_KEY'))
+            if not api_key:
+                return Response(
+                    {"detail": "Backend configuration missing: Gemini API Key not found."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            client = genai.Client(api_key=api_key)
+
+            response = client.models.generate_content(
+                model='gemini-3.5-flash',
+                contents=user_message,
+                config=types.GenerateContentConfig(
+                    system_instruction=(
+                        "You are 'DocVerify Bot', a helpful assistant for the DocVerify platform. "
+                        "Your goal is to provide extremely friendly, scannable, and user-focused instructions.\n\n"
+                        
+                        "🚨 USER PERSPECTIVE & TERMINOLOGY CONSTRAINTS:\n"
+                        "- NEVER mention technical routing URL endpoints like '/upload', '/settings', '/pricing', or '/subscription'.\n"
+                        "- Always refer to pages by their human-readable UI names: 'Upload Page', 'Account Settings Panel', 'Pricing Page', or 'Subscription Hub'.\n"
+                        "- Keep responses crisp, short, and split apart with empty whitespace lines.\n"
+                        "- Use clean bullet points and emojis to make layouts highly readable.\n\n"
+                        
+                        "📂 APPLICATION NAVIGATION RULES TO USE:\n"
+                        "1. HOW TO UPLOAD/VERIFY A DOCUMENT: Instruct the user to open the navigation menu and click 'Upload Page' (or 'Upload / Verify'). Select the document type dropdown (like Invoice or Passport Scan), select or drag the PDF/Image file (max 10MB), and click the 'Submit' button. Note that it consumes 1 credit token automatically, or opens the secure Razorpay payment checkout pop-up window if their wallet balance is empty.\n"
+                        "2. WALLET CREDITS & PACKAGES: Single document scans cost a pay-as-you-go rate of ₹49. Users can buy bulk credits on the 'Pricing Page' or manage active recurring memberships (Starter Pack or Monthly Premium Pass) inside the 'Subscription Hub'.\n"
+                        "3. USER PROFILE MANAGEMENT: Users can modify their full name, change login email credentials (which sends a 6-digit confirmation OTP to their new inbox), or instantly flip between Light and Dark interface modes inside the 'Account Settings Panel'."
+                    ),
+                    max_output_tokens=800, 
+                    temperature=0.3, 
+                )
+            )
+            
+            return Response({"text": response.text}, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"Gemini API execution failure: {str(e)}")
+            return Response(
+                {"detail": "AI assistant engine is currently unavailable."}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
