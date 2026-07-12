@@ -162,8 +162,12 @@ class DocumentUploadView(APIView):
                 processed_image = preprocess_image_for_ocr(temp_filename)
 
             if processed_image is not None:
-                text = pytesseract.image_to_string(processed_image)
-                ocr_data = pytesseract.image_to_data(processed_image, output_type=Output.DICT)
+                # 🚀 FIX: Pass explicit configuration matrices (--psm 3 for dynamic layout auto-detection)
+                # `--oem 3` forces the use of the advanced LSTM deep learning OCR engine
+                tesseract_custom_config = r'--oem 3 --psm 3 -c preserve_interword_spaces=1'
+                
+                text = pytesseract.image_to_string(processed_image, config=tesseract_custom_config)
+                ocr_data = pytesseract.image_to_data(processed_image, output_type=Output.DICT, config=tesseract_custom_config)
                 
                 valid_confidences = [int(c) for c in ocr_data['conf'] if int(c) > -1]
                 if valid_confidences:
@@ -394,9 +398,13 @@ class DocumentDetailView(APIView):
                         processed_image = preprocess_image_for_ocr(temp_filename)
 
                     if processed_image is not None:
-                        tesseract_config = r'--psm 6'
-                        text = pytesseract.image_to_string(processed_image, config=tesseract_config)
-                        ocr_data = pytesseract.image_to_data(processed_image, output_type=Output.DICT, config=tesseract_config)
+                        # 🚀 FIX: Standardize re-uploads using `--psm 3` instead of the limiting `--psm 6`
+                        # This allows multi-column invoices and statements to read line-by-line correctly
+                        tesseract_custom_config = r'--oem 3 --psm 3 -c preserve_interword_spaces=1'
+                        
+                        text = pytesseract.image_to_string(processed_image, config=tesseract_custom_config)
+                        ocr_data = pytesseract.image_to_data(processed_image, output_type=Output.DICT, config=tesseract_custom_config)
+                        
                         valid_confidences = [int(c) for c in ocr_data['conf'] if int(c) > -1]
                         if valid_confidences:
                             ocr_accuracy_score = round(sum(valid_confidences) / len(valid_confidences), 2)
