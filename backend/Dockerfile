@@ -1,10 +1,10 @@
-# Use a stable, lightweight Python runtime image
-FROM python:3.10-slim
+# 🚀 FIXED: Upgraded base image to Python 3.12 to support Django 6.x requirements
+FROM python:3.12-slim
 
 # Force apt-get to run completely unattended without looking for prompts
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 🚀 FIXED: Swapped 'libgl1-mesa-glx' for 'libgl1' to match the updated Debian package register
+# Clean up package targets and pull modern Debian dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     poppler-utils \
