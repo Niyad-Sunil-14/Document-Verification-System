@@ -16,6 +16,7 @@ from datetime import timedelta
 import cloudinary
 import cloudinary.uploader
 import environ
+import dj_database_url
 
 env = environ.Env(
     DEBUG=(bool, False) # Set default type and value
@@ -145,8 +146,8 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'niyadsystem@gmail.com' 
-EMAIL_HOST_PASSWORD = 'gjnsibvwusgyamfz' 
+EMAIL_HOST_USER = env('EMAIL_HOST_USER') 
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = 'docverify@gmail.com'
 
 
@@ -188,6 +189,16 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
 ]
 
+# Append production frontend origin if it exists
+PRODUCTION_FRONTEND_URL = env('FRONTEND_URL', default=None)
+if PRODUCTION_FRONTEND_URL:
+    CORS_ALLOWED_ORIGINS.append(PRODUCTION_FRONTEND_URL)
+
+DATABASES = {
+    'default': dj_database_url.config(
+        default=env('DATABASE_URL')
+    )
+}
 
 
 
