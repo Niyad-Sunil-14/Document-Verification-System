@@ -1,14 +1,14 @@
 # Use a stable, lightweight Python runtime image
 FROM python:3.10-slim
 
-# 🚀 FIX A: Force apt-get to run completely unattended without looking for prompts
+# Force apt-get to run completely unattended without looking for prompts
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 🚀 FIX B: Clean up package targets and remove unnecessary dev libraries that fail on slim images
+# 🚀 FIXED: Swapped 'libgl1-mesa-glx' for 'libgl1' to match the updated Debian package register
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     poppler-utils \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
