@@ -1,10 +1,12 @@
-# Use a lightweight, stable Python runtime image
+# Use a stable, lightweight Python runtime image
 FROM python:3.10-slim
 
-# Install Tesseract, PDF converters, OpenCV system dependencies, and clean up cache to minimize space
-RUN apt-get update && apt-get install -y \
+# 🚀 FIX A: Force apt-get to run completely unattended without looking for prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 🚀 FIX B: Clean up package targets and remove unnecessary dev libraries that fail on slim images
+RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
-    libtesseract-dev \
     poppler-utils \
     libgl1-mesa-glx \
     libglib2.0-0 \
