@@ -189,7 +189,10 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    'https://document-verification-system-delta.vercel.app',
 ]
+
+CORS_ALLOW_CREDENTIALS = True
 
 # Append production frontend origin if it exists
 PRODUCTION_FRONTEND_URL = env('FRONTEND_URL', default=None)
