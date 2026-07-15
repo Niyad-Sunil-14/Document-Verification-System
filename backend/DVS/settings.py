@@ -183,6 +183,14 @@ SIMPLE_JWT = {
 }
 
 
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake-id',
+    }
+}
+
+
 # CORS Configuration - Open debugging parameters to expose the raw validation payloads
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
