@@ -144,7 +144,6 @@ export default function NotificationsPage() {
   return (
     /* 🚀 FIXED: Wrapped layout context tracking light/dark theme shifts toggles */
     <div className="min-h-screen bg-slate-50/50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 antialiased font-sans transition-colors duration-200">
-      <Navbar />
       <main className="max-w-3xl mx-auto px-4 py-10">
         
         <div className="flex justify-between items-center mb-8">

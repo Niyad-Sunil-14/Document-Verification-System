@@ -78,7 +78,6 @@ export default function AccountSettings() {
     <div className={`min-h-screen font-sans antialiased transition-colors duration-200 ${
       preferences.darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'
     }`}>
-      <Navbar />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         

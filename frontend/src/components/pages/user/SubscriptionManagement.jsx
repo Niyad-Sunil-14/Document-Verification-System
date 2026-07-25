@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axiosInstance from '../../../api/Axiosinstance';
 import Navbar from './Navbar';
+import { loadRazorpayScript } from '../../../utils/loadRazorpay';
 
 export default function SubscriptionManagement() {
   const navigate = useNavigate();
@@ -13,21 +14,6 @@ export default function SubscriptionManagement() {
   const [message, setMessage] = useState('');
 
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
-
-  const loadRazorpayScript = () => {
-    return new Promise((resolve) => {
-      if (window.Razorpay) {
-        resolve(true);
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.async = true;
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
-  };
 
   const fetchSubscriptionDashboardData = async () => {
     try {
@@ -148,7 +134,6 @@ export default function SubscriptionManagement() {
   return (
     /* 🚀 FIXED: Global dynamic layout adjustments for smooth light/dark theme tracking transforms */
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans antialiased relative transition-colors duration-200">
-      <Navbar />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         

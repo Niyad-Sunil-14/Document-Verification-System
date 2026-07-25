@@ -118,7 +118,6 @@ export default function MyDocument() {
   return (
     /* 🚀 FIXED: Appended viewport context tracking light/dark theme shifts toggles */
     <div className="min-h-screen bg-slate-50/50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans antialiased transition-colors duration-200">
-      <Navbar />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         

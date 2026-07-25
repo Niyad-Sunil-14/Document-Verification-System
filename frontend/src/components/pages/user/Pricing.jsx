@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
 import axiosInstance from '../../../api/Axiosinstance';
+import { loadRazorpayScript } from '../../../utils/loadRazorpay';
 
 export default function Pricing() {
   const navigate = useNavigate();
@@ -9,16 +10,6 @@ export default function Pricing() {
   // Track the specific plan identifier string instead of a boolean flag
   const [processingPlan, setProcessingPlan] = useState(null); 
 
-  // Helper function to load Razorpay SDK dynamically via Promises
-  const loadRazorpayScript = () => {
-    return new Promise((resolve) => {
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
-  };
 
   // Razorpay Checkout Gateway Implementation
   const handleSubscriptionPayment = async (planType, amountInRupees, planDescription) => {
@@ -161,7 +152,6 @@ export default function Pricing() {
 
   return (
     <>
-      <Navbar />
       {/* 🚀 FIXED: Dynamic outer viewport context tracking theme switches */}
       <div className="bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 min-h-[calc(100vh-4rem)] py-12 px-4 sm:px-6 lg:px-8 transition-colors duration-200">
         <div className="max-w-6xl mx-auto">

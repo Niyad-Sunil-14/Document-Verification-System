@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
 import axiosInstance from '../../../api/Axiosinstance';
+import { loadRazorpayScript } from '../../../utils/loadRazorpay';
 
 export default function Upload() {
   const navigate = useNavigate();
@@ -30,17 +31,6 @@ export default function Upload() {
     };
     fetchProfile();
   }, []);
-
-  // Helper function to load Razorpay SDK dynamically via Promises
-  const loadRazorpayScript = () => {
-    return new Promise((resolve) => {
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
-  };
 
   // 2. DETECT FILE TYPE & MANAGE PREVIEW BLOB
   useEffect(() => {
@@ -216,8 +206,6 @@ export default function Upload() {
   return (
     /* 🚀 FIXED: Dynamic viewport color transitions for dark mode support */
     <div className="min-h-screen bg-slate-50/50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans antialiased transition-colors duration-200">
-      <Navbar />
-
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
         
         {/* HEADER SECTION */}

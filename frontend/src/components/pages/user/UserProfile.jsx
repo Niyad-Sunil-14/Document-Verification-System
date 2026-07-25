@@ -182,20 +182,8 @@ export default function UserProfile() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50/50 dark:bg-slate-900 flex flex-col transition-colors duration-200">
-        <Navbar />
-        <div className="flex-1 flex justify-center items-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-violet-600 dark:border-violet-400" />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-50/50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans antialiased transition-colors duration-200">
-      <Navbar />
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         
         <div className="mb-8 flex items-center justify-between">

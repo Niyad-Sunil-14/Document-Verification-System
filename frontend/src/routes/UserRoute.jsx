@@ -13,11 +13,13 @@ import UserDashboard from '../components/pages/user/UserDashboard'
 import AccountSettings from '../components/pages/user/AccountSettings'
 import NotificationsPage from '../components/pages/user/Notification'
 import Support from '../components/pages/user/Support'
+import Layout from '../components/pages/user/Layout'
 
 function UserRoute() {
   return (
     <>
       {/* 🔒 CLIENT PORTAL PATHS (Strictly protected from Admins using allowedRoles) */}
+        <Route element={<Layout />}>
           <Route path="/user-dashboard" element={
               <ProtectedRoute allowedRoles={['USER']}>
                 <UserDashboard/>
@@ -96,6 +98,7 @@ function UserRoute() {
               </ProtectedRoute>
             } 
           />
+        </Route>
     </>
   )
 }

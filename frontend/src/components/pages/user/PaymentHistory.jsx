@@ -62,7 +62,6 @@ export default function PaymentHistory() {
 
   return (
     <>
-        <Navbar/>
         {/* 🚀 FIXED: Main outer container panel shifts smoothly inside dark mode layout contexts */}
         <div className="bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 min-h-[calc(100vh-4rem)] py-10 px-4 sm:px-6 lg:px-8 transition-colors duration-200">
             <div className="max-w-5xl mx-auto">

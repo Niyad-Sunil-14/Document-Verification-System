@@ -69,7 +69,6 @@ export default function PaymentDetails() {
   return (
     /* 🚀 FIXED: Wrapped layout context tracking Tailwind v4 dark modifiers updates */
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans antialiased transition-colors duration-200">
-      <Navbar />
       <div className="py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl mx-auto">
           
