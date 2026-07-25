@@ -20,7 +20,7 @@ function CommonRoute() {
         <Route path="/register" element={<Register/>} />
         <Route path='/forgot-password' element={<ForgotPassword/>}/>
         <Route path='/verify-registration' element={<RegisterOTP/>}/>
-        </Route>
+      </Route>
     </>
   )
 }
