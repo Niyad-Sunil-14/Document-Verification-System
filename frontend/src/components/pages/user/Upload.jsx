@@ -3,12 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
 import axiosInstance from '../../../api/Axiosinstance';
 import { loadRazorpayScript } from '../../../utils/loadRazorpay';
+import { useUser } from '../../../context/UserContext'; // 1. IMPORT USER CONTEXT
 
 export default function Upload() {
   const navigate = useNavigate();
 
-  // 1. STATE MANAGEMENT
-  const [user, setUser] = useState(null); 
+  // 2. READ USER & REFRESH PROFILE DIRECTLY FROM CONTEXT (No local state/fetch needed!)
+  const { user, refreshProfile } = useUser();
+
+  // 3. PAGE-SPECIFIC STATES ONLY
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isPdf, setIsPdf] = useState(false); 
@@ -19,20 +22,7 @@ export default function Upload() {
   // Tracks specific sub-stages of checkout vs file transmission
   const [paymentStage, setPaymentStage] = useState('IDLE'); // IDLE, INITIATED, SUCCESS
 
-  // Fetch identity profile on mount to check credits balance availability
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const response = await axiosInstance.get('users/profile/');
-        setUser(response.data);
-      } catch (err) {
-        console.error("Failed fetching credits context profile:", err);
-      }
-    };
-    fetchProfile();
-  }, []);
-
-  // 2. DETECT FILE TYPE & MANAGE PREVIEW BLOB
+  // DETECT FILE TYPE & MANAGE PREVIEW BLOB
   useEffect(() => {
     if (!file) {
       setPreviewUrl(null);
@@ -60,7 +50,7 @@ export default function Upload() {
     }
   };
 
-  // 3. OPTIMIZED PAYMENT & FILE TRANSMISSION WORKFLOW
+  // OPTIMIZED PAYMENT & FILE TRANSMISSION WORKFLOW
   const handlePaymentAndUpload = async (e) => {
     e.preventDefault();
 
@@ -84,6 +74,11 @@ export default function Upload() {
         await axiosInstance.post('documents/upload/', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
+
+        // Sync global user state so remaining credits update everywhere
+        if (refreshProfile) {
+          await refreshProfile();
+        }
 
         setMessage({ text: '🎉 Document processed instantly using account credit!', isError: false });
         setFile(null); 
@@ -149,6 +144,11 @@ export default function Upload() {
               headers: { 'Content-Type': 'multipart/form-data' },
             });
 
+            // Sync global user state in case payment rewarded user credits
+            if (refreshProfile) {
+              await refreshProfile();
+            }
+
             setMessage({ text: '🎉 Payment authorized and document uploaded successfully!', isError: false });
             setFile(null); 
 
@@ -166,8 +166,8 @@ export default function Upload() {
           }
         },
         prefill: {
-          name: user_details?.fullname || '',
-          email: user_details?.email || '',
+          name: user_details?.fullname || user?.fullname || '',
+          email: user_details?.email || user?.email || '',
         },
         theme: {
           color: '#4f46e5', 
