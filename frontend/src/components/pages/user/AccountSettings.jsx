@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Navbar from './Navbar';
 import axiosInstance from '../../../api/Axiosinstance';
 import { useUser } from '../../../context/UserContext';
 
 export default function AccountSettings() {
   const navigate = useNavigate();
-  
-  // 🚀 OPTIMIZATION FIXED: Parse the localStorage theme state synchronously on initial boot 
-  // This completely prevents the light mode flashing effect before data initialization loads
+
+  // 1. GLOBAL USER STATE FROM CONTEXT
+  const { user, loading: userLoading } = useUser();
+
+  // Parse local workspace display preferences synchronously on mount
   const [preferences, setPreferences] = useState(() => {
     const savedPrefs = localStorage.getItem('user_workspace_settings_prefs');
     if (savedPrefs) {
@@ -21,22 +22,21 @@ export default function AccountSettings() {
     };
   });
 
-  // 1. STATE CONFIGURATION
-  const { user, loading } = useUser();
+  // 2. PAGE-SPECIFIC STATES
   const [subscription, setSubscription] = useState(null);
-  const [profile, setProfile] = useState(null);
+  const [isSubLoading, setIsSubLoading] = useState(true);
   const [message, setMessage] = useState({ text: '', isError: false });
 
-  // 2. DATA INITIALIZATION
+  // Combined loading status
+  const loading = userLoading || isSubLoading;
+
+  // 3. FETCH PAGE-SPECIFIC DATA ONLY (Subscription details)
   useEffect(() => {
-    const fetchSettingsData = async () => {
+    const fetchSubscriptionData = async () => {
       try {
-        setLoading(true);
-        const [subRes, profileRes] = await Promise.all([
-          axiosInstance.get('documents/users/subscription-details/'),
-        ]);
+        setIsSubLoading(true);
+        const subRes = await axiosInstance.get('documents/users/subscription-details/');
         setSubscription(subRes.data);
-        setProfile(profileRes.data);
       } catch (err) {
         console.error("Failed to parse configurations context:", err);
         setMessage({
@@ -44,14 +44,14 @@ export default function AccountSettings() {
           isError: true
         });
       } finally {
-        setLoading(false);
+        setIsSubLoading(false);
       }
     };
 
-    fetchSettingsData();
+    fetchSubscriptionData();
   }, []);
 
-  // 3. PERSIST PREFERENCE REVISIONS
+  // 4. PERSIST PREFERENCES & APPLY THEME
   const handlePrefChange = (key, value) => {
     const updatedPrefs = { ...preferences, [key]: value };
     setPreferences(updatedPrefs);
@@ -59,7 +59,6 @@ export default function AccountSettings() {
     
     setTimeout(() => setMessage({ text: '', isError: false }), 2000);
 
-    // Apply or remove dark theme configuration directly to the root DOM layer
     if (key === 'darkMode') {
       if (value) {
         document.documentElement.classList.add('dark');
@@ -81,14 +80,23 @@ export default function AccountSettings() {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         
-        {/* Page Title */}
+        {/* Page Title Header */}
         <div className="mb-10">
           <h1 className="text-3xl font-black tracking-tight uppercase">Account Settings</h1>
           <p className="text-sm font-medium text-slate-500 mt-1">Configure workspace environment layouts, personalize interface themes, and track subscription scopes.</p>
         </div>
 
+        {message.text && (
+          <div className={`mb-6 p-4 rounded-xl border text-xs font-bold text-center ${
+            message.isError 
+              ? 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/20 dark:border-rose-900/40 dark:text-rose-400' 
+              : 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900/40 dark:text-emerald-400'
+          }`}>
+            {message.text}
+          </div>
+        )}
+
         {loading ? (
-          /* 🚀 FIXED: The loading container now reliably references the correct initial synchronous dark mode check */
           <div className={`rounded-2xl border p-20 text-center shadow-sm flex flex-col items-center justify-center transition-colors duration-200 ${
             preferences.darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
           }`}>
@@ -103,7 +111,7 @@ export default function AccountSettings() {
             {/* CONTENT PREFERENCE BLOCKS */}
             <div className="lg:col-span-2 space-y-8">
               
-              {/* CARD MODULE 1: TOKENS BALANCE */}
+              {/* CARD MODULE 1: CREDITS BALANCE */}
               <div className={`border rounded-2xl p-6 shadow-sm space-y-6 ${
                 preferences.darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
               }`}>
@@ -118,7 +126,7 @@ export default function AccountSettings() {
                   <div className="space-y-1">
                     <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Remaining Balance</span>
                     <div className="text-3xl font-black text-indigo-500">
-                      {profile?.document_credits ?? 0} <span className="text-sm font-bold text-slate-400">Credits</span>
+                      {user?.document_credits ?? 0} <span className="text-sm font-bold text-slate-400">Credits</span>
                     </div>
                   </div>
                   <button 
@@ -130,7 +138,7 @@ export default function AccountSettings() {
                 </div>
               </div>
 
-              {/* CARD MODULE 2: WORKSPACE ENVIRONMENT PREFERENCES */}
+              {/* CARD MODULE 2: WORKSPACE PREFERENCES */}
               <div className={`border rounded-2xl p-6 shadow-sm space-y-6 ${
                 preferences.darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
               }`}>
@@ -140,7 +148,7 @@ export default function AccountSettings() {
                 </div>
 
                 <div className="space-y-5">
-                  {/* LIGHT / DARK OPTION TOGGLE SWITCH */}
+                  {/* LIGHT / DARK MODE TOGGLE */}
                   <div className={`flex items-center justify-between pb-4 border-b ${
                     preferences.darkMode ? 'border-slate-700' : 'border-slate-100'
                   }`}>
@@ -151,7 +159,7 @@ export default function AccountSettings() {
                     <select
                       value={preferences.darkMode ? 'dark' : 'light'}
                       onChange={(e) => handlePrefChange('darkMode', e.target.value === 'dark')}
-                      className={`border rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none text-slate-800 cursor-pointer h-9 w-32 ${
+                      className={`border rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none cursor-pointer h-9 w-32 ${
                         preferences.darkMode ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-800'
                       }`}
                     >
@@ -160,7 +168,7 @@ export default function AccountSettings() {
                     </select>
                   </div>
 
-                  {/* Email Notifications Toggle Switch */}
+                  {/* EMAIL NOTIFICATIONS TOGGLE */}
                   <div className={`flex items-center justify-between pb-4 border-b ${
                     preferences.darkMode ? 'border-slate-700' : 'border-slate-100'
                   }`}>
@@ -176,7 +184,7 @@ export default function AccountSettings() {
                     />
                   </div>
 
-                  {/* Automated Download Toggle Switch */}
+                  {/* AUTO-DOWNLOAD JSON TOGGLE */}
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <label className="text-xs font-bold uppercase tracking-wide">Auto-Download JSON Data</label>
@@ -219,7 +227,7 @@ export default function AccountSettings() {
                     {formatPlanDisplay(subscription?.plan_type)}
                   </div>
                   <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-                    {subscription?.is_active 
+                    {subscription?.is_active && subscription?.expires_at
                       ? `Automatic renewal occurs on ${new Date(subscription.expires_at).toLocaleDateString('en-IN')}.`
                       : "No active recurring contract pass configured."}
                   </p>
@@ -248,12 +256,14 @@ export default function AccountSettings() {
                   preferences.darkMode ? 'divide-slate-700 text-slate-400' : 'divide-slate-100 text-slate-500'
                 }`}>
                   <div className="py-2.5 flex justify-between">
-                    <span className="text-slate-400">Environment Node</span>
-                    <span className={`font-bold font-mono ${preferences.darkMode ? 'text-slate-200' : 'text-slate-700'}`}>Ubuntu Linux</span>
+                    <span className="text-slate-400">User Identity</span>
+                    <span className={`font-bold font-mono ${preferences.darkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                      {user?.email || 'Authenticated'}
+                    </span>
                   </div>
                   <div className="py-2.5 flex justify-between">
-                    <span className="text-slate-400">Channel Entry</span>
-                    <span className={`font-bold ${preferences.darkMode ? 'text-slate-200' : 'text-slate-700'}`}>Web Interface Portal</span>
+                    <span className="text-slate-400">Environment Node</span>
+                    <span className={`font-bold font-mono ${preferences.darkMode ? 'text-slate-200' : 'text-slate-700'}`}>Ubuntu Linux</span>
                   </div>
                   <div className="py-2.5 flex justify-between">
                     <span className="text-slate-400">Connection Health</span>

@@ -52,7 +52,8 @@ export default function Navbar() {
     } catch (error) {
       console.error("Backend token blacklisting failed:", error);
     } finally {
-      localStorage.clear();
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
       navigate('/');
     }
   };
