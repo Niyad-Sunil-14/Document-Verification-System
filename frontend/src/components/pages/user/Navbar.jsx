@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import axiosInstance from '../../../api/Axiosinstance';
+import { useUser } from '../../../context/UserContext';
 
 export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  // 🚀 Read global user state directly from Context
+  const { user } = useUser();
 
   // State for notifications
   const [notifications, setNotifications] = useState([]);
@@ -17,7 +17,7 @@ export default function Navbar() {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // 🚀 FIXED: Dynamic NavLink tracking now fully supports Tailwind v4 dark modifiers
+  // Dynamic NavLink active state
   const getNavLinkClass = (path) => {
     const isActive = location.pathname === path;
     return `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold h-full transition duration-150 ${
@@ -28,23 +28,17 @@ export default function Navbar() {
   };
 
   useEffect(() => {
-    const fetchUserProfileAndAlerts = async () => {
+    const fetchNotifications = async () => {
       try {
-        setLoading(true);
-        const profileResponse = await axiosInstance.get('users/profile/'); 
-        setUser(profileResponse.data);
-
+        // Fetch unread notifications (Notifications remain live/uncached)
         const alertResponse = await axiosInstance.get('documents/notifications/');
         setNotifications(alertResponse.data.slice(0, 3));
       } catch (err) {
-        console.error("Profile/Notification systems failing:", err);
-        setError(err.response?.data?.detail || 'Identity sync issue.');
-      } finally {
-        setLoading(false);
+        console.error("Notifications system failing:", err);
       }
     };
-    
-    fetchUserProfileAndAlerts();
+
+    fetchNotifications();
   }, []);
 
   const hasUnread = notifications.some(n => !n.is_read);
@@ -64,7 +58,6 @@ export default function Navbar() {
   };
 
   return (
-    /* 🚀 FIXED: Navbar container adapted for light/dark transitions */
     <nav className="bg-white border-b border-slate-200 dark:bg-slate-800 dark:border-slate-700 sticky top-0 z-50 shadow-sm transition-colors duration-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">

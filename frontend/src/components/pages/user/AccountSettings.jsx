@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
 import axiosInstance from '../../../api/Axiosinstance';
+import { useUser } from '../../../context/UserContext';
 
 export default function AccountSettings() {
   const navigate = useNavigate();
@@ -21,9 +22,9 @@ export default function AccountSettings() {
   });
 
   // 1. STATE CONFIGURATION
+  const { user, loading } = useUser();
   const [subscription, setSubscription] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ text: '', isError: false });
 
   // 2. DATA INITIALIZATION
@@ -33,7 +34,6 @@ export default function AccountSettings() {
         setLoading(true);
         const [subRes, profileRes] = await Promise.all([
           axiosInstance.get('documents/users/subscription-details/'),
-          axiosInstance.get('users/profile/')
         ]);
         setSubscription(subRes.data);
         setProfile(profileRes.data);

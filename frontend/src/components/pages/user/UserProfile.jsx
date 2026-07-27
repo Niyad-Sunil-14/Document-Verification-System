@@ -1,19 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Navbar from './Navbar';
 import axiosInstance from '../../../api/Axiosinstance';
+import { useUser } from '../../../context/UserContext';
 
 export default function UserProfile() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
-  // 1. STATE MANAGEMENT
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('INFO');
+  // 1. GLOBAL STATE & CONTEXT HELPERS
+  const { user, loading, refreshProfile } = useUser();
 
-  // Form States
+  // 2. LOCAL COMPONENT STATES
+  const [activeTab, setActiveTab] = useState('INFO');
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({ fullname: '', email: '' });
   const [passwordData, setPasswordData] = useState({ old_password: '', new_password: '', confirm_password: '' });
@@ -28,27 +26,15 @@ export default function UserProfile() {
   const [actionMessage, setActionMessage] = useState({ text: '', isError: false });
   const [showPasswords, setShowPasswords] = useState({ old: false, new: false, confirm: false });
 
-  // 2. FETCH IDENTITY DATA ON MOUNT
+  // Sync initial form values whenever user context loads or updates
   useEffect(() => {
-    const fetchUserProfile = async () => {
-      try {
-        setLoading(true);
-        setError('');
-        const response = await axiosInstance.get('users/profile/');
-        setUser(response.data);
-        setFormData({
-          fullname: response.data?.fullname || '',
-          email: response.data?.email || '',
-        });
-      } catch (err) {
-        console.error("Profile fetching failed:", err);
-        setError(err.response?.data?.detail || 'Failed to establish connection to identity vault.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchUserProfile();
-  }, []);
+    if (user) {
+      setFormData({
+        fullname: user.fullname || '',
+        email: user.email || '',
+      });
+    }
+  }, [user]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -60,7 +46,7 @@ export default function UserProfile() {
     setPasswordData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Profile Picture Upload handler routing directly to multipart streams
+  // Profile Picture Upload Handler
   const handleProfilePicUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -70,11 +56,12 @@ export default function UserProfile() {
       const picFormData = new FormData();
       picFormData.append('profile_picture', file);
 
-      const response = await axiosInstance.patch('users/profile/', picFormData, {
+      await axiosInstance.patch('users/profile/', picFormData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      setUser(response.data);
+      // 🚀 Re-fetches fresh user data and updates Context across all components
+      refreshProfile();
       setActionMessage({ text: '📸 Profile picture updated successfully!', isError: false });
     } catch (err) {
       console.error("Avatar streaming error:", err);
@@ -84,7 +71,7 @@ export default function UserProfile() {
     }
   };
 
-  // Initiates the multi-step verification tree if the email field has changed
+  // Initiates update or email verification workflow
   const handleSaveChanges = async (e) => {
     e.preventDefault();
     try {
@@ -96,8 +83,10 @@ export default function UserProfile() {
         setIsOtpStep(true);
         setActionMessage({ text: '📩 An authorization code was sent to your new email.', isError: false });
       } else {
-        const response = await axiosInstance.put('users/profile/', { fullname: formData.fullname });
-        setUser(response.data);
+        await axiosInstance.put('users/profile/', { fullname: formData.fullname });
+        
+        // 🚀 Updates global state instantly
+        refreshProfile();
         setIsEditing(false);
         setActionMessage({ text: '🎉 Profile changes saved successfully!', isError: false });
       }
@@ -109,16 +98,16 @@ export default function UserProfile() {
     }
   };
 
-  // Finalizes database verification once the OTP is input correctly
+  // Finalizes email verification & updates details
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     try {
       setIsSaving(true);
       await axiosInstance.post('users/confirm-email-update/', { code: otpCode });
+      await axiosInstance.put('users/profile/', { fullname: formData.fullname });
       
-      const finalResponse = await axiosInstance.put('users/profile/', { fullname: formData.fullname });
-      setUser(finalResponse.data);
-      
+      // 🚀 Refresh context state
+      refreshProfile();
       setIsEditing(false);
       setIsOtpStep(false);
       setOtpCode('');
@@ -131,7 +120,7 @@ export default function UserProfile() {
     }
   };
 
-  // 🚀 RESTORED FIXED FUNCTION: Resolves submission ReferenceErrors on Password Mutation tabs
+  // Password Modification Handler
   const handleUpdatePassword = async (e) => {
     e.preventDefault();
     if (passwordData.new_password !== passwordData.confirm_password) {
@@ -181,6 +170,14 @@ export default function UserProfile() {
       return rawDate;
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50/50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans antialiased transition-colors duration-200">

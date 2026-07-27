@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import Navbar from './Navbar'; 
 import { Link, useNavigate } from 'react-router-dom'; 
 import axiosInstance from '../../../api/Axiosinstance';
+import { useUser } from '../../../context/UserContext';
 
 export default function UserDashboard() {
   const navigate = useNavigate();
 
   // 1. STATE MANAGEMENT
-  const [user, setUser] = useState();
-  const [loading, setLoading] = useState(true);
+  const { user, loading } = useUser();
   const [error, setError] = useState('');
   const [documents, setDocuments] = useState([]);
   const [filterType, setFilterType] = useState('ALL');
@@ -53,21 +53,7 @@ export default function UserDashboard() {
         console.error("Failed pulling cross-sectional metrics loops:", err);
       }
     };
-
-    const fetchUserProfile = async () => {
-      try {
-        setLoading(true);
-        const response = await axiosInstance.get('users/profile/'); 
-        setUser(response.data);
-      } catch (err) {
-        console.error("Profile fetching failed:", err);
-        setError(err.response?.data?.detail || 'Failed to establish connection to identity vault.');
-      } finally {
-        setLoading(false);
-      }
-    };
     
-    fetchUserProfile();
     fetchList();
     fetchSummaryMetrics();
   }, []);
