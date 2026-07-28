@@ -1,4 +1,4 @@
-import React, { useEffect, Suspense } from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter, Routes } from 'react-router-dom';
 import CommonRoute from './routes/CommonRoute';
 import UserRoute from './routes/UserRoute';
@@ -13,18 +13,6 @@ const PageLoader = () => (
 );
 
 function App() {
-  useEffect(() => {
-    const savedPrefs = localStorage.getItem('user_workspace_settings_prefs');
-    if (savedPrefs) {
-      const { darkMode } = JSON.parse(savedPrefs);
-      if (darkMode) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    }
-  }, []);
-
   return (
     <BrowserRouter>
       <UserProvider>

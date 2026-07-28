@@ -1,35 +1,50 @@
+// Login.jsx
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import axiosInstance from '../../api/Axiosinstance';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router-dom';
+import { useUser } from '../../context/UserContext';
 
 const Login = () => {
   const [serverError, setServerError] = useState("");
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
   const navigate = useNavigate();
-  const [showPassword, setShowPassword] = useState(false); // 🔥 FIXED: Boolean configuration instead of a blank string
+  const { fetchProfile, setUser } = useUser(); // 👈 Destructure setUser & fetchProfile
+  const [showPassword, setShowPassword] = useState(false);
 
   const onSubmit = async (data) => {
     setServerError(""); 
     try {
-      // Alternative approach inside try block if backend doesn't output info on login:
-  const response = await axiosInstance.post('auth/login/', data);
+      // 1. Authenticate & obtain tokens
+      const response = await axiosInstance.post('auth/login/', data);
 
-  // Temporarily attach token to fetch profile data
-  localStorage.setItem('access_token', response.data.access);
+      // 2. Store tokens FIRST
+      localStorage.setItem('access_token', response.data.access);
+      localStorage.setItem('refresh_token', response.data.refresh);
 
-  const profileResponse = await axiosInstance.get('users/profile/');
-  if (profileResponse.data.is_staff || profileResponse.data.is_superuser) {
-    localStorage.clear(); // Drop the token immediately
-    setServerError("Access Denied: Administrators must use the secure Staff Gateway portal.");
-    return;
-  }
+      // 3. Fetch profile data and wait for it
+      const profileData = await fetchProfile();
 
-  // Valid user, store refresh token and proceed
-  localStorage.setItem('refresh_token', response.data.refresh);
+      if (!profileData) {
+        setServerError("Failed to initialize user session. Please try again.");
+        return;
+      }
+
+      // 4. Admin / Staff Guard Check
+      if (profileData.is_staff || profileData.is_superuser) {
+        localStorage.clear();
+        setUser(null);
+        setServerError("Access Denied: Administrators must use the secure Staff Gateway portal.");
+        return;
+      }
+
+      // 5. Navigate AFTER context user state is populated
       navigate('/user-dashboard', { replace: true });
     } catch (err) {
-      const errorMsg = "Invalid Email or Password";
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      setUser(null);
+      const errorMsg = err.response?.data?.detail || "Invalid Email or Password";
       setServerError(errorMsg);
     }
   };
@@ -52,7 +67,6 @@ const Login = () => {
 
         <div className="md:w-1/2 bg-white p-10 flex flex-col justify-center">
           <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">Welcome Back</h2>
-          <p className="text-xs text-gray-400 text-center mb-8"></p>
           
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             

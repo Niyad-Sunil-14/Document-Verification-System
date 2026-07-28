@@ -3,6 +3,7 @@ from . views import *
 
 urlpatterns = [
     path('upload/',DocumentUploadView.as_view(),name='document-upload'),
+    path('summary/', DocumentSummaryView.as_view(), name='document-summary'),
     path('list/', DocumentListView.as_view(), name='document-list'),
     path('detail/<int:pk>/', DocumentDetailView.as_view(), name='document-detail'),
     path('notifications/',NotificationListView.as_view(),name='notificaitions'),

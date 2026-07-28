@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import axiosInstance from '../../../api/Axiosinstance';
 import { useUser } from '../../../context/UserContext';
@@ -27,19 +27,24 @@ export default function Navbar() {
     }`;
   };
 
+  const hasFetchedRef = useRef(false);
+
   useEffect(() => {
+    // Prevent duplicate fetching on re-renders or Strict Mode remounts
+    if (hasFetchedRef.current || !user) return;
+    hasFetchedRef.current = true;
+
     const fetchNotifications = async () => {
       try {
-        // Fetch unread notifications (Notifications remain live/uncached)
-        const alertResponse = await axiosInstance.get('documents/notifications/');
-        setNotifications(alertResponse.data.slice(0, 3));
+        const response = await axiosInstance.get('documents/notifications/');
+        setNotifications(response.data);
       } catch (err) {
-        console.error("Notifications system failing:", err);
+        console.error(err);
       }
     };
 
     fetchNotifications();
-  }, []);
+  }, [user]);
 
   const hasUnread = notifications.some(n => !n.is_read);
 

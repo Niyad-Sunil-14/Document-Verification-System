@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Navbar from './Navbar'; 
 import { Link, useNavigate } from 'react-router-dom'; 
 import axiosInstance from '../../../api/Axiosinstance';
 import { useUser } from '../../../context/UserContext';
@@ -8,12 +7,11 @@ export default function UserDashboard() {
   const navigate = useNavigate();
 
   // 1. STATE MANAGEMENT
-  const { user, loading } = useUser();
-  const [error, setError] = useState('');
+  const { user } = useUser();
   const [documents, setDocuments] = useState([]);
-  const [filterType, setFilterType] = useState('ALL');
+  const [filterType] = useState('ALL');
 
-  // Track total entire database counts from paginated meta-data
+  // Metric State Counters
   const [totalCount, setTotalCount] = useState(0);
   const [approvedCount, setApprovedCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
@@ -21,44 +19,37 @@ export default function UserDashboard() {
 
   // 2. INGESTION MATRIX
   useEffect(() => {
-    const fetchList = async () => {
+    const fetchDashboardData = async () => {
       try {
-        const response = await axiosInstance.get('documents/list/');
-        
-        if (response.data && response.data.results) {
-          setDocuments(response.data.results);
-          setTotalCount(response.data.count || 0);
+        // Fetch document list and summary metrics concurrently
+        const [listRes, summaryRes] = await Promise.all([
+          axiosInstance.get('documents/list/?limit=3'),
+          axiosInstance.get('documents/summary/')
+        ]);
+
+        // Process Document List
+        if (listRes.data && listRes.data.results) {
+          setDocuments(listRes.data.results);
         } else {
-          const dataArray = response.data || [];
-          setDocuments(dataArray);
-          setTotalCount(dataArray.length);
+          setDocuments(listRes.data || []);
+        }
+
+        // Process Summary Metrics
+        if (summaryRes.data) {
+          setTotalCount(summaryRes.data.total ?? 0);
+          setApprovedCount(summaryRes.data.approved ?? 0);
+          setPendingCount(summaryRes.data.pending ?? 0);
+          setRejectedCount(summaryRes.data.rejected ?? 0);
         }
       } catch (err) {
-        console.error("Dashboard table collection fetch failed:", err);
+        console.error("Dashboard data initialization failed:", err);
       }
     };
 
-    const fetchSummaryMetrics = async () => {
-      try {
-        const [approvedRes, pendingRes, rejectedRes] = await Promise.all([
-          axiosInstance.get('documents/list/?status=APPROVED'),
-          axiosInstance.get('documents/list/?status=PENDING'),
-          axiosInstance.get('documents/list/?status=REJECTED')
-        ]);
-        
-        setApprovedCount(approvedRes.data.count ?? approvedRes.data.length ?? 0);
-        setPendingCount(pendingRes.data.count ?? pendingRes.data.length ?? 0);
-        setRejectedCount(rejectedRes.data.count ?? rejectedRes.data.length ?? 0);
-      } catch (err) {
-        console.error("Failed pulling cross-sectional metrics loops:", err);
-      }
-    };
-    
-    fetchList();
-    fetchSummaryMetrics();
+    fetchDashboardData();
   }, []);
 
-  // 3. FILTER CONDITIONAL LOGIC (For the localized table preview)
+  // 3. FILTER CONDITIONAL LOGIC (For localized table preview)
   const filteredDocuments = documents.filter((doc) => {
     if (filterType === 'ALL') return true;
     return doc.status === filterType;
@@ -78,7 +69,6 @@ export default function UserDashboard() {
     return `${cleanType} ${labelSuffix}`;
   };
 
-  // 🚀 UPDATED: Badges now support dark backgrounds and clear text contrasting
   const getStatusBadge = (status) => {
     const badges = {
       SUCCESS: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/50',
@@ -89,9 +79,7 @@ export default function UserDashboard() {
     return `px-3 py-1 rounded-full text-xs font-semibold border ${badges[status] || badges.PENDING}`;
   };
 
-
   return (
-    /* 🚀 FIXED: Root viewport shifts dynamically based on dark modes */
     <div className="min-h-screen bg-slate-50/50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans antialiased transition-colors duration-200">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         
@@ -102,7 +90,6 @@ export default function UserDashboard() {
         </div>
 
         {/* METRIC SUMMARIES */}
-        {/* 🚀 FIXED: Grids transition from white to slate-800 borders matching dark modes */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
           <div className="bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 p-6 rounded-2xl shadow-sm transition-colors duration-200">
             <p className="text-sm font-semibold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Total Documents Uploaded</p>
@@ -133,7 +120,6 @@ export default function UserDashboard() {
         </div>
 
         {/* DATA FILTERING BAR & RECENT REVIEWS CONTAINER */}
-        {/* 🚀 FIXED: Table containers updated for high-density dark panel configurations */}
         <div className="bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 shadow-sm rounded-2xl overflow-hidden transition-colors duration-200">
           
           <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50 dark:bg-slate-900/20">

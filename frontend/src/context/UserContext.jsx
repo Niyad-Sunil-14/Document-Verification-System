@@ -1,3 +1,4 @@
+// UserContext.jsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axiosInstance, { invalidateCache } from '../api/Axiosinstance';
 
@@ -7,21 +8,32 @@ export function UserProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 🚀 Single source of truth for user profile
   const fetchProfile = useCallback(async () => {
+    const token = localStorage.getItem('access_token');
+
+    if (!token) {
+      setUser(null);
+      setLoading(false);
+      return null;
+    }
+
     try {
-      const response = await axiosInstance.get('users/profile/', { useCache: true });
+      const response = await axiosInstance.get('users/profile/');
       setUser(response.data);
-      return response.data;
+      return response.data; // 👈 Return response data so callers can await state update
     } catch (err) {
       console.error("Failed to load user context profile:", err);
+      if (err.response?.status === 401) {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+      }
       setUser(null);
+      return null;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Refresh helper for after profile updates
   const refreshProfile = useCallback(async () => {
     invalidateCache('users/profile/');
     return await fetchProfile();
@@ -38,5 +50,4 @@ export function UserProvider({ children }) {
   );
 }
 
-// Custom Hook to consume user data in any component
 export const useUser = () => useContext(UserContext);

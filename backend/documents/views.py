@@ -64,6 +64,25 @@ from .models import Document, Payment, Notification  # 🚀 Added Notification i
 
 # Keep your logger and pre-processing utility imports/functions here...
 
+class DocumentSummaryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Perform 1 optimized SQL aggregate query for all statuses
+        stats = Document.objects.filter(user=request.user).aggregate(
+            total=Count('id'),
+            pending=Count('id', filter=Q(status='PENDING')),
+            approved=Count('id', filter=Q(status='APPROVED')),
+            rejected=Count('id', filter=Q(status='REJECTED'))
+        )
+
+        return Response({
+            "total": stats['total'] or 0,
+            "pending": stats['pending'] or 0,
+            "approved": stats['approved'] or 0,
+            "rejected": stats['rejected'] or 0,
+        })
+
 class DocumentUploadView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = (MultiPartParser, FormParser)
@@ -289,14 +308,15 @@ class DocumentListView(APIView):
         # 1. Base Queryset Filter by Role Access
         if request.user.is_staff:
             queryset = Document.objects.all()
-            ITEMS_PER_PAGE = 10  # 💻 Admin side keeps 10 rows per page
+            ITEMS_PER_PAGE = 10
         else:
             queryset = Document.objects.filter(user=request.user)
-            ITEMS_PER_PAGE = 12  # 🚀 User side gets exactly 12 documents per page!
+            ITEMS_PER_PAGE = 12
 
         # 2. Extract Query Parameters
         status_filter = request.query_params.get('status', 'ALL')
         search_term = request.query_params.get('search', '').strip()
+        limit_param = request.query_params.get('limit')  # 👈 Read limit parameter
         
         try:
             page_num = int(request.query_params.get('page', 1))
@@ -320,8 +340,22 @@ class DocumentListView(APIView):
         # Order by newest uploads
         queryset = queryset.order_by('-uploaded_at')
 
-        # 4. Calculate Dynamic Slicing
+        # 4. Calculate Dynamic Slicing / Limit Handling
         total_count = queryset.count()
+
+        # 🚀 Check if caller requested a explicit top N limit (e.g. Dashboard preview)
+        if limit_param and limit_param.isdigit():
+            limit = int(limit_param)
+            paginated_queryset = queryset[:limit]
+            serializer = self.serializer_class(paginated_queryset, many=True)
+            return Response({
+                "count": total_count,
+                "next": False,
+                "previous": False,
+                "results": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        # Standard Paginated Slicing
         start_index = (page_num - 1) * ITEMS_PER_PAGE
         end_index = start_index + ITEMS_PER_PAGE
 
