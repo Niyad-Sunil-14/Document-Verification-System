@@ -45,7 +45,7 @@ def generate_and_send_otp(email):
     # Setup Transactional Email Payload
     send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
         to=[{"email": email}],
-        sender={"name": "DocVerify", "email": "docverify@gmail.com"},
+        sender={"name": "DocVerify", "email": "niyadsystem@gmail.com"},
         subject="Activate Your Account - Verification Code",
         html_content=f"""
             <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
@@ -327,7 +327,7 @@ class RequestEmailUpdateView(APIView):
         
         send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
             to=[{"email": new_email}],
-            sender={"name": "DocVerify Security", "email": "docverify@gmail.com"},
+            sender={"name": "DocVerify Security", "email": "niyadsystem@gmail.com"},
             subject="DocVerify Security Center: Confirm Your New Email Address",
             html_content=f"""
                 <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
