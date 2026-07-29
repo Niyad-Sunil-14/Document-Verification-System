@@ -1,4 +1,6 @@
+// Axiosinstance.jsx
 import axios from 'axios';
+import Swal from 'sweetalert2';
 
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/',
@@ -7,12 +9,11 @@ const axiosInstance = axios.create({
 
 const cache = new Map();
 
-// 💡 Helper to manually invalidate specific URLs from anywhere in your app
 export const invalidateCache = (url) => {
   if (url) {
     cache.delete(url);
   } else {
-    cache.clear(); // Clear all if no URL provided
+    cache.clear();
   }
 };
 
@@ -23,7 +24,6 @@ axiosInstance.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  // Serve from cache if useCache is enabled
   if (config.method === 'get' && config.useCache) {
     const cachedResponse = cache.get(config.url);
     if (cachedResponse) {
@@ -34,25 +34,52 @@ axiosInstance.interceptors.request.use((config) => {
   return config;
 });
 
+// Flag to prevent multiple simultaneous popups if 3 API requests fail at once
+let isSessionExpiredAlertShowing = false;
+
 // Response Interceptor
 axiosInstance.interceptors.response.use(
   (response) => {
     const method = response.config.method.toLowerCase();
 
-    // 1. Save to cache on GET if useCache is set
     if (method === 'get' && response.config.useCache) {
       cache.set(response.config.url, response);
     }
 
-    // 2. 🚀 AUTOMATIC INVALIDATION:
-    // If a POST/PUT/PATCH/DELETE request succeeds, purge the cached GET entry for that endpoint
     if (['post', 'put', 'patch', 'delete'].includes(method)) {
       cache.delete(response.config.url);
     }
 
     return response;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    // 🚀 Catch 401 Unauthorized on ANY API call from the SAME PAGE
+    if (error.response && error.response.status === 401) {
+      if (!isSessionExpiredAlertShowing) {
+        isSessionExpiredAlertShowing = true;
+
+        // Clear stored tokens
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+
+        Swal.fire({
+          title: 'Session Expired',
+          text: 'Your session has timed out. Please log in again to continue.',
+          icon: 'warning',
+          confirmButtonText: 'Go to Login',
+          confirmButtonColor: '#4f46e5',
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+        }).then((result) => {
+          if (result.isConfirmed) {
+            isSessionExpiredAlertShowing = false;
+            window.location.href = '/login';
+          }
+        });
+      }
+    }
+    return Promise.reject(error);
+  }
 );
 
 export default axiosInstance;

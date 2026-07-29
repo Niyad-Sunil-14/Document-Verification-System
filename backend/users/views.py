@@ -11,7 +11,6 @@ from rest_framework.permissions import AllowAny,IsAuthenticated,IsAdminUser
 from rest_framework_simplejwt.tokens import RefreshToken
 from . signals import password_reset_requested
 from django.core.cache import cache
-from django.core.mail import send_mail
 from django.contrib.auth import get_user_model
 import random
 import logging
@@ -20,6 +19,8 @@ import cloudinary.uploader
 import os
 from django.conf import settings
 from groq import Groq 
+import sib_api_v3_sdk
+from sib_api_v3_sdk.rest import ApiException
 
 # Create your views here.
 
@@ -29,28 +30,43 @@ logger = logging.getLogger(__name__)
 
 
 def generate_and_send_otp(email):
-    """Helper utility to generate a 6-digit pin, cache it, and email it."""
+    """Helper utility to generate a 6-digit pin, cache it, and dispatch via Brevo HTTP API."""
     otp = f"{random.randint(100000, 999999)}"
     
-    # 🚨 TEMPORARILY COMMENT THIS OUT TO BYPASS THE CACHE FREEZE:
-    # cache.set(f"reg_otp_{email}", otp, timeout=600)
+    # Store OTP in Django cache with a 10-minute timeout (600 seconds)
+    cache.set(f"reg_otp_{email}", otp, timeout=600)
     
-    # Dispatch dispatch payload via SMTP
+    # Configure Brevo API Client
+    configuration = sib_api_v3_sdk.Configuration()
+    configuration.api_key['api-key'] = os.environ.get('BREVO_API_KEY') or getattr(settings, 'BREVO_API_KEY', None)
+
+    api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
+    
+    # Setup Transactional Email Payload
+    send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
+        to=[{"email": email}],
+        sender={"name": "DocVerify", "email": "docverify@gmail.com"},
+        subject="Activate Your Account - Verification Code",
+        html_content=f"""
+            <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                <h2>Account Verification</h2>
+                <p>Your secure registration verification code is:</p>
+                <h1 style="color: #4f46e5; letter-spacing: 4px;">{otp}</h1>
+                <p>This code will expire in 10 minutes.</p>
+            </div>
+        """
+    )
+
     try:
-        send_mail(
-            subject="Activate Your Account - Verification Code",
-            message=f"Your secure registration verification code is: {otp}. It expires in 10 minutes.",
-            from_email="noreply@identity.vault",
-            recipient_list=[email],
-            fail_silently=True,
-        )
-        logger.info(f"OTP successfully transmitted to {email}")
+        api_response = api_instance.send_transac_email(send_smtp_email)
+        logger.info(f"OTP successfully transmitted via Brevo HTTP API to {email}: {api_response}")
         return True
+    except ApiException as e:
+        logger.error(f"Brevo API dispatch failed for {email}: {str(e)}")
+        return False
     except Exception as e:
-        logger.error(f"Failed to send email to {email}: {str(e)}")
-        return True  # Force True so registration view succeeds
-
-
+        logger.error(f"Unexpected error sending OTP to {email}: {str(e)}")
+        return False
 
 
 class RegisterView(generics.CreateAPIView):
@@ -273,7 +289,6 @@ class ChangePasswordView(APIView):
 
 
 
-
 class RequestEmailUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -304,18 +319,39 @@ class RequestEmailUpdateView(APIView):
             timeout=600
         )
         
-        send_mail(
-            subject="DocVerify Security Center: Confirm Your New Email Address",
-            message=f"Your confirmation token is: {verification_code}. It will expire in 10 minutes.",
-            from_email="security@docverify.com",
-            recipient_list=[new_email],
-            fail_silently=False,
-        )
+        # Configure Brevo API Client
+        configuration = sib_api_v3_sdk.Configuration()
+        configuration.api_key['api-key'] = os.environ.get('BREVO_API_KEY') or getattr(settings, 'BREVO_API_KEY', None)
+
+        api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
         
-        return Response(
-            {"detail": "Verification security token dispatched successfully."}, 
-            status=status.HTTP_200_OK
+        send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
+            to=[{"email": new_email}],
+            sender={"name": "DocVerify Security", "email": "docverify@gmail.com"},
+            subject="DocVerify Security Center: Confirm Your New Email Address",
+            html_content=f"""
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                    <h2>Security Verification</h2>
+                    <p>Your confirmation token to update your email address is:</p>
+                    <h1 style="color: #4f46e5; letter-spacing: 4px;">{verification_code}</h1>
+                    <p>This token will expire in 10 minutes.</p>
+                </div>
+            """
         )
+
+        try:
+            api_instance.send_transac_email(send_smtp_email)
+            return Response(
+                {"detail": "Verification security token dispatched successfully."}, 
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            logger.error(f"Failed to dispatch email update token to {new_email}: {str(e)}")
+            return Response(
+                {"detail": "Failed to send email verification token."}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 class ConfirmEmailUpdateView(APIView):
     permission_classes = [IsAuthenticated]

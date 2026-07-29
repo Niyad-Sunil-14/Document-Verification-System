@@ -8,3 +8,10 @@ createRoot(document.getElementById('root')).render(
   // Remove <React.StrictMode> for a quick test
   <App />
 );
+
+
+// createRoot(document.getElementById('root')).render(
+//   <StrictMode>
+//     <App />
+//   </StrictMode>,
+// )
