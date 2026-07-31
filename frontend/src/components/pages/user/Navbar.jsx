@@ -36,7 +36,7 @@ export default function Navbar() {
 
     const fetchNotifications = async () => {
       try {
-        const response = await axiosInstance.get('documents/notifications/');
+        const response = await axiosInstance.get('documents/notifications/?limit=3');
         setNotifications(response.data);
       } catch (err) {
         console.error(err);

@@ -546,9 +546,21 @@ class NotificationListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        notifications = Notification.objects.filter(user=request.user)
+        # 1. Base queryset ordered by newest first
+        notifications = Notification.objects.filter(user=request.user).order_by('-created_at')
+        
+        # 2. Filter unread if requested
         if request.query_params.get('unread_only') == 'true':
             notifications = notifications.filter(is_read=False)
+            
+        # 3. Slice by limit parameter if provided (e.g., ?limit=3)
+        limit = request.query_params.get('limit')
+        if limit:
+            try:
+                limit_int = int(limit)
+                notifications = notifications[:limit_int]
+            except ValueError:
+                pass  # Skip slicing if limit isn't a valid integer
         
         serializer = NotificationSerializer(notifications, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
