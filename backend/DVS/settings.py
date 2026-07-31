@@ -177,12 +177,27 @@ SIMPLE_JWT = {
 }
 
 
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'unique-snowflake-id',
+REDIS_URL = os.environ.get('REDIS_URL')
+
+if REDIS_URL:
+    # Production Cache Setup (Render + Redis)
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            }
+        }
     }
-}
+else:
+    # Local Development Cache Setup
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "unique-snowflake-id",
+        }
+    }
 
 
 # CORS Configuration - Open debugging parameters to expose the raw validation payloads

@@ -71,6 +71,7 @@ def generate_and_send_otp(email):
 
 class RegisterView(generics.CreateAPIView):
     permission_classes = [AllowAny]
+    serializer_class = RegisterSerializer
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -153,16 +154,35 @@ class AdminLoginView(TokenObtainPairView):
 
 
 class RequestOTPView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
     def post(self, request):
         email = request.data.get('email')
         
         if not email:
-            return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Email is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
             
+        # Check if user exists
         if CustomUser.objects.filter(email=email).exists():
-            password_reset_requested.send(sender=self.__class__, email=email)
-            return Response({"message": "OTP has been sent."}, status=status.HTTP_200_OK)
+            # Dispatch OTP using Brevo HTTP API
+            otp_sent = generate_and_send_otp(email)
+            
+            if otp_sent:
+                return Response(
+                    {"message": "OTP has been sent to your email address."}, 
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {"error": "Failed to send OTP email. Please try again later."}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
         
+        # Security Tip: Avoid revealing user existence in production if preferred,
+        # but for explicit errors:
         return Response(
             {"error": "No user found with this email address."}, 
             status=status.HTTP_404_NOT_FOUND
@@ -170,33 +190,58 @@ class RequestOTPView(APIView):
 
 
 class ResetPasswordView(APIView):
+    authentication_classes = []  # Bypass token auth on reset as well
     permission_classes = [AllowAny]
+    serializer_class = ResetPasswordSerializer
 
     def post(self, request):
         serializer = ResetPasswordSerializer(data=request.data)
         if serializer.is_valid():
-            email = serializer.validated_data['email']
-            otp_received = serializer.validated_data['otp']
+            # 1. Normalize email
+            email = serializer.validated_data['email'].strip().lower()
+            otp_received = str(serializer.validated_data['otp']).strip()
             new_password = serializer.validated_data['new_password']
             
-            cached_otp = cache.get(f"otp_{email}")
+            # 2. Fetch from cache
+            cache_key = f"reg_otp_{email}"
+            cached_otp = cache.get(cache_key)
+            
+            # ---------------- DEBUG LOGS ----------------
+            print(f"======================================")
+            print(f"[DEBUG RESET] Key searched: '{cache_key}'")
+            print(f"[DEBUG RESET] Value found in Redis: '{cached_otp}'")
+            print(f"[DEBUG RESET] OTP received from React: '{otp_received}'")
+            print(f"======================================")
+            # --------------------------------------------
             
             if not cached_otp:
-                return Response({"error": "OTP has expired or was never requested."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "OTP has expired or was never requested."}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
                 
-            if cached_otp != otp_received:
-                return Response({"error": "Invalid OTP code."}, status=status.HTTP_400_BAD_REQUEST)
+            if str(cached_otp).strip() != otp_received:
+                return Response(
+                    {"error": "Invalid OTP code."}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
             try:
                 user = CustomUser.objects.get(email=email)
                 user.set_password(new_password)
                 user.save()
                 
-                cache.delete(f"otp_{email}")
+                cache.delete(cache_key)
                 
-                return Response({"message": "Password updated successfully."}, status=status.HTTP_200_OK)
+                return Response(
+                    {"message": "Password updated successfully."}, 
+                    status=status.HTTP_200_OK
+                )
             except CustomUser.DoesNotExist:
-                return Response({"error": "User no longer exists."}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"error": "User no longer exists."}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
                 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     

@@ -1,4 +1,3 @@
-// Axiosinstance.jsx
 import axios from 'axios';
 import Swal from 'sweetalert2';
 
@@ -8,6 +7,14 @@ const axiosInstance = axios.create({
 });
 
 const cache = new Map();
+
+// Define all public endpoints that should NEVER send a token or trigger session expiration
+const PUBLIC_ENDPOINTS = [
+  'auth/login',
+  'auth/register',
+  'auth/forgot-password',
+  'auth/reset-password',
+];
 
 export const invalidateCache = (url) => {
   if (url) {
@@ -19,9 +26,18 @@ export const invalidateCache = (url) => {
 
 // Request Interceptor
 axiosInstance.interceptors.request.use((config) => {
+  // Check if the current request is for a public endpoint
+  const isPublicEndpoint = PUBLIC_ENDPOINTS.some((endpoint) =>
+    config.url?.includes(endpoint)
+  );
+
   const token = localStorage.getItem('access_token');
-  if (token) {
+  
+  // 🛑 FIX 1: Only attach Authorization header if it's NOT a public endpoint
+  if (token && !isPublicEndpoint) {
     config.headers.Authorization = `Bearer ${token}`;
+  } else {
+    delete config.headers.Authorization;
   }
 
   if (config.method === 'get' && config.useCache) {
@@ -53,8 +69,13 @@ axiosInstance.interceptors.response.use(
     return response;
   },
   (error) => {
-    // 🚀 Catch 401 Unauthorized on ANY API call from the SAME PAGE
-    if (error.response && error.response.status === 401) {
+    // Check if the error came from a public endpoint
+    const isPublicEndpoint = PUBLIC_ENDPOINTS.some((endpoint) =>
+      error.config?.url?.includes(endpoint)
+    );
+
+    // 🚀 FIX 2: Only trigger Session Expired if 401 occurs AND it's NOT a public endpoint
+    if (error.response && error.response.status === 401 && !isPublicEndpoint) {
       if (!isSessionExpiredAlertShowing) {
         isSessionExpiredAlertShowing = true;
 
@@ -78,6 +99,8 @@ axiosInstance.interceptors.response.use(
         });
       }
     }
+
+    // Always reject the error so individual catch blocks (e.g., Login.jsx) can display specific error messages
     return Promise.reject(error);
   }
 );
