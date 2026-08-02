@@ -9,7 +9,6 @@ export default function UserDetails() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [adminEmail, setAdminEmail] = useState('admin@docverify.io');
   
   // Active sub-panel tab toggle selector ('DOCUMENTS' or 'PAYMENTS')
   const [activeTab, setActiveTab] = useState('DOCUMENTS');
@@ -18,12 +17,9 @@ export default function UserDetails() {
     const fetchUserProfileDetails = async () => {
       try {
         setLoading(true);
+        // 🚀 ONLY fetch targeted user details
         const response = await axiosInstance.get(`admin/users/${id}/`);
         setProfile(response.data);
-        const profileResponse = await axiosInstance.get('users/profile/');
-        if (profileResponse.data?.email) {
-          setAdminEmail(profileResponse.data.email);
-        }
       } catch (err) {
         console.error("Profile parsing error:", err);
         setError("Failed to construct profile record indicators. Check route permissions.");
@@ -35,16 +31,14 @@ export default function UserDetails() {
     fetchUserProfileDetails();
   }, [id]);
 
-// 🚀 Fixed Currency Formatter: Takes direct Rupee integers, drops .00 decimals
   const formatToINR = (amountInRupees) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
-      maximumFractionDigits: 0 // Keeps it clean as ₹299 or ₹99 without .00
+      maximumFractionDigits: 0
     }).format(amountInRupees || 0);
   };
 
-  // 🚀 PLAN TYPE CONVERTER UTIL: Converts 'PREMIUM_TIER' -> 'Premium Tier'
   const formatPlanType = (plan) => {
     if (!plan) return "Standard Plan";
     return plan
@@ -55,11 +49,10 @@ export default function UserDetails() {
 
   return (
     <>
-      <AdminNavbar email={adminEmail} />
+      <AdminNavbar />
       <div className="bg-slate-50 min-h-[calc(100vh-4rem)] py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
           
-          {/* Back Action Header */}
           <button
             onClick={() => navigate('/all-users')}
             className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-slate-900 transition mb-6 cursor-pointer bg-transparent border-0 outline-none"
@@ -78,7 +71,6 @@ export default function UserDetails() {
           ) : (
             <div className="space-y-6">
               
-              {/* Account Meta Metric Card */}
               <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
@@ -92,14 +84,12 @@ export default function UserDetails() {
                   <p className="text-sm font-mono text-gray-400 mt-0.5">{profile.email}</p>
                 </div>
 
-                {/* Tokens display badge metrics */}
                 <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 text-left sm:text-right">
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Available Tokens</p>
                   <p className="text-xl font-extrabold text-slate-800">{profile.document_credits} Credits</p>
                 </div>
               </div>
 
-              {/* TAB SELECTION NAVIGATION TRIGGER ROW */}
               <div className="flex border-b border-slate-200 space-x-6 text-sm font-bold">
                 <button
                   onClick={() => setActiveTab('DOCUMENTS')}
@@ -123,7 +113,6 @@ export default function UserDetails() {
                 </button>
               </div>
 
-              {/* OPTION 1: DOCUMENTS TABLE BLOCK */}
               {activeTab === 'DOCUMENTS' && (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-fadeIn">
                   <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
@@ -176,7 +165,6 @@ export default function UserDetails() {
                 </div>
               )}
 
-              {/* OPTION 2: PAYMENTS HISTORY TABLE BLOCK */}
               {activeTab === 'PAYMENTS' && (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-fadeIn">
                   <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
@@ -204,11 +192,9 @@ export default function UserDetails() {
                               <td className="px-6 py-3.5 font-mono text-slate-500 text-[11px]">
                                 #{pay.razorpay_order_id || pay.id}
                               </td>
-                              {/* 🚀 Rupee formatted output rendering column */}
                               <td className="px-6 py-3.5 font-extrabold text-slate-900 text-sm">
                                 {formatToINR(pay.amount)}
                               </td>
-                              {/* 🚀 Capitalized human readable string text layout mapping */}
                               <td className="px-6 py-3.5 font-semibold text-slate-700">
                                 {formatPlanType(pay.plan_type)}
                               </td>

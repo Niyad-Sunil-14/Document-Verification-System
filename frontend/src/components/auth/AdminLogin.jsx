@@ -1,28 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import axiosInstance from '../../api/Axiosinstance';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useUser } from '../../context/UserContext';
 
 const AdminLogin = () => {
   const [serverError, setServerError] = useState("");
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
   const navigate = useNavigate();
+  const location = useLocation();
   const [showPassword, setShowPassword] = useState(false);
+  const { user, setUser, fetchProfile } = useUser();
+
+  const targetPath = location.state?.from?.pathname && location.state.from.pathname !== '/admin-login'
+    ? location.state.from.pathname
+    : '/admin-dashboard';
+
+  // If already authenticated as admin, redirect to admin dashboard
+  useEffect(() => {
+    const isStaff = user?.is_staff || user?.is_superuser || user?.role === 'ADMIN';
+    if (user && isStaff) {
+      navigate(targetPath, { replace: true });
+    }
+  }, [user, navigate, targetPath]);
 
   const eyes = () => {
     setShowPassword(!showPassword);
   };
-
 
   const onSubmit = async (data) => {
     setServerError("");
     try {
       const response = await axiosInstance.post('auth/admin-login/', data);
       
+      // Store tokens
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
 
-      navigate('/admin-dashboard');
+      // Update User Context
+      if (response.data.user) {
+        setUser(response.data.user);
+      } else if (fetchProfile) {
+        await fetchProfile();
+      }
+
+      // Navigate after state sync
+      navigate(targetPath, { replace: true, state: null });
     } catch (err) {
       const errorMsg = err.response?.data?.detail || "Admin authentication failed.";
       setServerError(errorMsg);
@@ -31,13 +54,12 @@ const AdminLogin = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900">
-      {/* Main Container Card - Uses Slate-800 for a more "Secure/Admin" feel */}
       <div className="bg-white rounded-3xl shadow-2xl flex flex-col md:flex-row max-w-4xl w-full overflow-hidden min-h-[500px]">
         
-        {/* Left Side: Darker Branding Area */}
+        {/* Branding Area */}
         <div className="md:w-1/2 bg-slate-800 flex flex-col items-center justify-center p-8 text-white text-center">
           <div className="mb-7 p-2.5 bg-slate-700 rounded-full shadow-inner">
-              <img src="/logo.png" alt="icon" className="w-full h-auto object-contain max-w-[110px]"/>
+            <img src="/logo.png" alt="icon" className="w-full h-auto object-contain max-w-[110px]"/>
           </div>
           <h1 className="text-3xl font-bold tracking-tight">DocVerify Admin Portal</h1>
           <p className="mt-4 text-slate-400 text-sm max-w-xs">
@@ -45,25 +67,19 @@ const AdminLogin = () => {
           </p>
         </div>
 
-        {/* Right Side: Form Area */}
+        {/* Form Area */}
         <div className="md:w-1/2 bg-white p-10 flex flex-col justify-center">
           <div className="mb-8">
-            {/* <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">
-              Secure Access
-            </span> */}
             <h2 className="text-2xl font-bold text-gray-900 mt-2">Admin Sign-In</h2>
           </div>
           
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            
-            {/* Inline Server Error Message */}
             {serverError && (
               <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm font-medium animate-pulse">
                 {serverError}
               </div>
             )}
 
-            {/* Email Input */}
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1 ml-1 uppercase">Admin Email</label>
               <input
@@ -77,13 +93,9 @@ const AdminLogin = () => {
               {errors.email && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.email.message}</p>}
             </div>
 
-            {/* Password Input */}
-            <div className="relative"> {/* 🔥 Added 'relative' here to anchor the absolute button */}
-              <label className="block text-xs font-semibold text-gray-500 mb-1 ml-1 uppercase">
-                Password
-              </label>
-              
-              <div className="relative"> {/* 🔥 Extra relative wrapper to bind the input and button together */}
+            <div className="relative">
+              <label className="block text-xs font-semibold text-gray-500 mb-1 ml-1 uppercase">Password</label>
+              <div className="relative">
                 <input
                   {...register("password", { required: "Password is required" })}
                   type={showPassword ? "text" : "password"}
@@ -93,7 +105,6 @@ const AdminLogin = () => {
                   }`}
                 />
                 
-                {/* 🔥 Adjusted top positioning to center perfectly vertical inside the py-3 input */}
                 <button 
                   onClick={eyes} 
                   type="button" 
@@ -119,14 +130,14 @@ const AdminLogin = () => {
                 isSubmitting ? 'bg-slate-400 cursor-not-allowed' : 'bg-slate-800 hover:bg-slate-900 active:scale-[0.98]'
               }`}
             >
-              {isSubmitting ? 'Loging in...' : 'Login'}
+              {isSubmitting ? 'Logging in...' : 'Login'}
             </button>
 
             <div className="text-center mt-6">
               <button 
                 type="button"
                 onClick={() => navigate('/login')}
-                className="text-xs text-blue-600 font-semibold hover:underline"
+                className="text-xs text-blue-600 font-semibold hover:underline bg-transparent border-0 cursor-pointer"
               >
                 Return to Standard User Login
               </button>

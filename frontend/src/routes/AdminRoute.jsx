@@ -38,7 +38,7 @@ function AdminRoute() {
             }
           />
 
-          <Route path='admin/users/:id' element={
+          <Route path='/admin/users/:id' element={
               <ProtectedRoute allowedRoles={['ADMIN']}>
                 <UserDetails/>
               </ProtectedRoute>

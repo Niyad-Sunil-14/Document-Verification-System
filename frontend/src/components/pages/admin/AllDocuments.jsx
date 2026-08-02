@@ -13,7 +13,6 @@ export default function AllDocuments() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [adminEmail, setAdminEmail] = useState('admin@docverify.io');
 
   // PAGINATION STATES
   const [currentPage, setCurrentPage] = useState(1);
@@ -39,21 +38,15 @@ export default function AllDocuments() {
         setLoading(true);
         setError('');
 
-        // Build the URL including active states
         const url = `documents/list/?status=${statusFilter}&search=${encodeURIComponent(searchTerm)}&page=${currentPage}`;
 
+        // 🚀 ONLY fetch listed documents
         const docsResponse = await axiosInstance.get(url);
         
-        // Populate states dynamically using backend counts
         setDocuments(docsResponse.data.results || []);
         setTotalCount(docsResponse.data.count || 0);
         setHasNext(!!docsResponse.data.next);
         setHasPrevious(!!docsResponse.data.previous);
-
-        const profileResponse = await axiosInstance.get('users/profile/');
-        if (profileResponse.data?.email) {
-          setAdminEmail(profileResponse.data.email);
-        }
 
       } catch (err) {
         console.error("Failed to pull document registry records:", err);
@@ -66,12 +59,11 @@ export default function AllDocuments() {
     fetchDocumentsData();
   }, [statusFilter, searchTerm, currentPage]); 
 
-  // Dynamically computes total pages based on the exact filter result pool length
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE) || 1;
 
   const handleFilterChange = (newStatus) => {
     setStatusFilter(newStatus);
-    setCurrentPage(1); // Reset to page 1 so fresh pools start at index 1
+    setCurrentPage(1);
   };
 
   const handleSearchChange = (e) => {
@@ -106,7 +98,7 @@ export default function AllDocuments() {
 
   return (
     <div className="min-h-screen bg-slate-50/50 text-slate-900 antialiased font-sans">
-      <AdminNavbar email={adminEmail} />
+      <AdminNavbar />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         
@@ -121,7 +113,6 @@ export default function AllDocuments() {
           </div>
         )}
 
-        {/* CONTROLS BAR (Maintains active focus because it's detached from empty rendering checks) */}
         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mb-6 flex flex-col sm:flex-row gap-4 items-center justify-between">
           <div className="w-full sm:max-w-md relative">
             <input
@@ -149,13 +140,11 @@ export default function AllDocuments() {
           </div>
         </div>
 
-        {/* DATA CONTAINER PORTAL */}
         {loading && documents.length === 0 ? (
           <div className="flex justify-center items-center min-h-[350px]">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-slate-800" />
           </div>
         ) : documents.length === 0 ? (
-          /* Isolated Empty State Box */
           <div className="bg-white border border-slate-200 rounded-xl p-16 text-center shadow-sm">
             <span className="text-5xl block mb-4">📂</span>
             <h3 className="text-lg font-bold text-slate-900">No Matching Records Found</h3>
@@ -168,7 +157,6 @@ export default function AllDocuments() {
             </button>
           </div>
         ) : (
-          /* RESULTS DATA TABLE CONTAINER */
           <div className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden relative">
             {loading && (
               <div className="absolute top-0 left-0 right-0 h-1 bg-slate-800 animate-pulse" />
@@ -228,7 +216,6 @@ export default function AllDocuments() {
               </table>
             </div>
 
-            {/* DYNAMIC PAGINATION FOOTER */}
             {totalCount > ITEMS_PER_PAGE && (
               <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
                 <span className="text-xs font-semibold text-gray-400">

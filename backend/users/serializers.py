@@ -41,17 +41,25 @@ class AdminTokenObtainSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-        token['role'] = user.role  
+        token['role'] = getattr(user, 'role', 'ADMIN')  
         return token
 
     def validate(self, attrs):
         data = super().validate(attrs)
         
-        if self.user.role != 'ADMIN':
+        # Verify admin/staff privileges
+        if not (self.user.is_staff or self.user.is_superuser or getattr(self.user, 'role', None) == 'ADMIN'):
             raise AuthenticationFailed(detail="Access denied. Only Admin can authenticate.")
         
-        data['fullname'] = getattr(self.user, 'fullname', '')
-        data['role'] = self.user.role
+        # 🚀 FIX: Return the nested 'user' dictionary required by AdminLogin.jsx
+        data['user'] = {
+            'id': self.user.id,
+            'email': self.user.email,
+            'fullname': getattr(self.user, 'fullname', ''),
+            'is_staff': self.user.is_staff,
+            'is_superuser': self.user.is_superuser,
+            'role': getattr(self.user, 'role', 'ADMIN')
+        }
         return data
 
 

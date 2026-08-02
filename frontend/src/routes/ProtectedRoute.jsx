@@ -1,36 +1,56 @@
-// ProtectedRoute.jsx
-import React from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import React, { useEffect, useRef } from 'react';
+import { Navigate, useLocation, Outlet } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { useUser } from '../context/UserContext';
 
 export default function ProtectedRoute({ children, allowedRoles = ['USER'] }) {
   const { user, loading } = useUser();
+  const location = useLocation();
   const token = localStorage.getItem('access_token');
+  const alertShownRef = useRef(false);
 
-  // 1. Missing token on navigation: Show Swal once and halt render
+  const isAdminRoute = allowedRoles.includes('ADMIN');
+
+  useEffect(() => {
+    const isManualLogout = localStorage.getItem('is_manual_logout');
+
+    // 1. If user intentionally logged out, clear the flag and suppress the alert!
+    if (isManualLogout) {
+      localStorage.removeItem('is_manual_logout');
+      return;
+    }
+
+    // 2. Check if user is already on a login route
+    const isLoginPath = location.pathname === '/login' || location.pathname === '/admin-login';
+
+    // 3. Only fire SweetAlert if it was an ACTUAL session loss (token missing & not a manual logout)
+    if (!token && !alertShownRef.current && !isLoginPath) {
+      alertShownRef.current = true;
+      Swal.fire({
+        title: 'Session Expired',
+        text: 'Your session has expired or you are not logged in.',
+        icon: 'warning',
+        confirmButtonText: 'Go to Login',
+        confirmButtonColor: '#4f46e5',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = isAdminRoute ? '/admin-login' : '/login';
+        }
+      });
+    }
+  }, [token, isAdminRoute, location.pathname]);
+
   if (!token) {
-    Swal.fire({
-      title: 'Session Expired',
-      text: 'Your session has expired or you are not logged in.',
-      icon: 'warning',
-      confirmButtonText: 'Go to Login',
-      confirmButtonColor: '#4f46e5',
-      allowOutsideClick: false,
-      allowEscapeKey: false,
-    }).then((result) => {
-      if (result.isConfirmed) {
-        window.location.href = '/login';
-      }
-    });
     return null;
   }
 
   if (loading) return null;
 
   if (!user) {
-    const isAdminRoute = allowedRoles.includes('ADMIN');
-    return <Navigate to={isAdminRoute ? "/admin-login" : "/login"} replace />;
+    const targetLogin = isAdminRoute ? "/admin-login" : "/login";
+    return <Navigate to={targetLogin} replace />;
   }
 
   const isStaff = 

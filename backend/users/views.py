@@ -149,6 +149,8 @@ class UserLoginView(TokenObtainPairView):
     serializer_class = StrictUserTokenSerializer
 
 class AdminLoginView(TokenObtainPairView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
     serializer_class = AdminTokenObtainSerializer
 
 
@@ -205,14 +207,6 @@ class ResetPasswordView(APIView):
             # 2. Fetch from cache
             cache_key = f"reg_otp_{email}"
             cached_otp = cache.get(cache_key)
-            
-            # ---------------- DEBUG LOGS ----------------
-            print(f"======================================")
-            print(f"[DEBUG RESET] Key searched: '{cache_key}'")
-            print(f"[DEBUG RESET] Value found in Redis: '{cached_otp}'")
-            print(f"[DEBUG RESET] OTP received from React: '{otp_received}'")
-            print(f"======================================")
-            # --------------------------------------------
             
             if not cached_otp:
                 return Response(

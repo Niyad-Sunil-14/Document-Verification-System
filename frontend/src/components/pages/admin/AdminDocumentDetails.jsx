@@ -13,10 +13,9 @@ export default function AdminDocumentDetails() {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
-  const [adminEmail, setAdminEmail] = useState('admin@docverify.io');
   const [remarks, setRemarks] = useState('');
 
-  // 🚀 CUSTOM MODAL CONFIRMATION STATES
+  // CUSTOM MODAL CONFIRMATION STATES
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState(null);
 
@@ -27,16 +26,13 @@ export default function AdminDocumentDetails() {
         setLoading(true);
         setError('');
         
-        const [docResponse, profileResponse] = await Promise.all([
-          axiosInstance.get(`documents/detail/${id}/`),
-          axiosInstance.get('users/profile/')
-        ]);
+        // 🚀 ONLY fetch the specific document detail
+        const docResponse = await axiosInstance.get(`documents/detail/${id}/`);
 
         setDocument(docResponse.data);
         if (docResponse.data?.remarks) {
           setRemarks(docResponse.data.remarks);
         }
-        if (profileResponse.data?.email) setAdminEmail(profileResponse.data.email);
       } catch (err) {
         console.error("Admin asset loader fault:", err);
         setError(err.response?.data?.detail || 'Asset resolution error across secure data nodes.');
@@ -90,7 +86,7 @@ export default function AdminDocumentDetails() {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50/50 flex flex-col">
-        <AdminNavbar email={adminEmail} />
+        <AdminNavbar />
         <div className="flex-1 flex justify-center items-center">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-slate-800" />
         </div>
@@ -103,7 +99,7 @@ export default function AdminDocumentDetails() {
 
   return (
     <div className="min-h-screen bg-slate-50/50 text-slate-900 font-sans antialiased relative">
-      <AdminNavbar email={adminEmail} />
+      <AdminNavbar />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         
@@ -233,7 +229,7 @@ export default function AdminDocumentDetails() {
                 <div className="space-y-2 pt-2">
                   <button 
                     disabled={actionLoading || document?.status === 'APPROVED'}
-                    onClick={() => triggerStatusConfirmation('APPROVED')} // 🚀 Modal Confirmation Trigger
+                    onClick={() => triggerStatusConfirmation('APPROVED')}
                     className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl shadow transition duration-100 cursor-pointer"
                   >
                     {actionLoading ? 'Processing...' : 'Verify & Approve Document'}
@@ -241,7 +237,7 @@ export default function AdminDocumentDetails() {
 
                   <button 
                     disabled={actionLoading || document?.status === 'REJECTED'}
-                    onClick={() => triggerStatusConfirmation('REJECTED')} // 🚀 Modal Confirmation Trigger
+                    onClick={() => triggerStatusConfirmation('REJECTED')}
                     className="w-full py-2.5 bg-white hover:bg-rose-50 border border-rose-200 text-rose-700 disabled:opacity-40 text-xs font-bold rounded-xl transition duration-100 cursor-pointer"
                   >
                     {actionLoading ? 'Processing...' : 'Reject & Send Remarks'}
@@ -251,7 +247,6 @@ export default function AdminDocumentDetails() {
               </div>
             </div>
 
-            {/* 🚀 COMPLIANCE GUIDE OVERHAUL PANEL */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 text-white shadow-xl">
               <h4 className="text-xs font-black text-violet-400 uppercase tracking-widest mb-2">Audit Compliance Guide</h4>
               <p className="text-[11px] text-slate-300 leading-relaxed font-medium">
@@ -265,7 +260,7 @@ export default function AdminDocumentDetails() {
 
       </main>
 
-      {/* 🚀 TAILWIND MODAL DIALOG COMPONENT PANEL */}
+      {/* TAILWIND MODAL DIALOG COMPONENT PANEL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white rounded-2xl border border-slate-100 p-6 max-w-sm w-full shadow-2xl space-y-4">

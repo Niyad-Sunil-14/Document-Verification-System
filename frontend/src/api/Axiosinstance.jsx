@@ -14,6 +14,7 @@ const PUBLIC_ENDPOINTS = [
   'auth/register',
   'auth/forgot-password',
   'auth/reset-password',
+  'auth/admin-login',
 ];
 
 export const invalidateCache = (url) => {

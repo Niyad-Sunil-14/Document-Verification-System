@@ -7,8 +7,6 @@ export default function AllUsers() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [adminEmail, setAdminEmail] = useState('admin@docverify.io');
-  
   
   // Search & Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -16,7 +14,7 @@ export default function AllUsers() {
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8; // Max users shown per row list block
+  const itemsPerPage = 8;
   
   const navigate = useNavigate();
 
@@ -24,13 +22,9 @@ export default function AllUsers() {
     const fetchAllUsers = async () => {
       try {
         setLoading(true);
-        // Assumes your backend routing contains an admin utility fetch endpoint
+        // 🚀 ONLY fetch system users
         const response = await axiosInstance.get('admin/users/');
         setUsers(response.data);
-        const profileResponse = await axiosInstance.get('users/profile/');
-        if (profileResponse.data?.email) {
-          setAdminEmail(profileResponse.data.email);
-        }
       } catch (err) {
         console.error("Failed fetching system users:", err);
         setError("Could not parse user directory profiles. Ensure you have admin clearances.");
@@ -42,7 +36,6 @@ export default function AllUsers() {
     fetchAllUsers();
   }, []);
 
-  // Reset pagination to page 1 whenever search or filter metrics change
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
     setCurrentPage(1);
@@ -53,7 +46,6 @@ export default function AllUsers() {
     setCurrentPage(1);
   };
 
-  // 🔥 LIVE FILTER & SEARCH MATRIX CALCULATIONS
   const filteredUsers = users.filter((account) => {
     const name = account.fullname ? account.fullname.toLowerCase() : '';
     const email = account.email ? account.email.toLowerCase() : '';
@@ -69,7 +61,6 @@ export default function AllUsers() {
     return matchSearch && matchPlan;
   });
 
-  // Compute Pagination Boundaries based on filtered array pool
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentUsers = filteredUsers.slice(indexOfFirstItem, indexOfLastItem);
@@ -77,11 +68,10 @@ export default function AllUsers() {
 
   return (
     <>
-      <AdminNavbar email={adminEmail} />
+      <AdminNavbar />
       <div className="bg-slate-50 min-h-[calc(100vh-4rem)] py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto">
           
-          {/* Header */}
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">All Users</h1>
             <p className="text-sm text-gray-500 mt-1">
@@ -89,7 +79,6 @@ export default function AllUsers() {
             </p>
           </div>
 
-          {/* CONTROLS BAR (Placed statically outside data loop to prevent cursor drop logs) */}
           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm mb-6 flex flex-col sm:flex-row gap-4 items-center justify-between">
             <div className="w-full sm:max-w-md relative">
               <input
@@ -115,7 +104,6 @@ export default function AllUsers() {
             </div>
           </div>
 
-          {/* Conditional Layout Output Pipeline */}
           {loading ? (
             <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm">
               <div className="animate-spin rounded-full h-8 w-8 border-2 border-violet-600 border-t-transparent mx-auto mb-4" />
@@ -138,7 +126,6 @@ export default function AllUsers() {
               </button>
             </div>
           ) : (
-            /* Table Index */
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
@@ -188,7 +175,6 @@ export default function AllUsers() {
                 </table>
               </div>
 
-              {/* Pagination Controls */}
               <div className="bg-slate-50/70 px-6 py-4 border-t border-slate-200 flex items-center justify-between gap-4">
                 <div className="text-xs text-gray-500 font-medium">
                   Showing <span className="font-bold text-slate-700">{indexOfFirstItem + 1}</span> to{' '}
