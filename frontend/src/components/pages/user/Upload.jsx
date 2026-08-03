@@ -84,7 +84,7 @@ export default function Upload() {
         setFile(null); 
 
         setTimeout(() => {
-          navigate('/user-dashboard'); 
+          navigate('/documents'); 
         }, 2000);
 
       } catch (uploadErr) {
