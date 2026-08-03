@@ -14,17 +14,30 @@ export default function AllUsers() {
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const [totalCount, setTotalCount] = useState(0);
+  const itemsPerPage = 8; // Or match your DRF backend page size
   
   const navigate = useNavigate();
 
+  // Fetch users from API whenever page, search, or filter changes
   useEffect(() => {
-    const fetchAllUsers = async () => {
+    const fetchUsers = async () => {
       try {
         setLoading(true);
-        // 🚀 ONLY fetch system users
-        const response = await axiosInstance.get('admin/users/');
-        setUsers(response.data);
+        setError('');
+
+        // Send parameters to Django DRF API
+        const response = await axiosInstance.get('admin/users/', {
+          params: {
+            page: currentPage,
+            search: searchTerm,
+            plan: planFilter,
+          },
+        });
+
+        // 🚀 Extract `results` array and `count` from DRF Paginated Response
+        setUsers(response.data.results || []);
+        setTotalCount(response.data.count || 0);
       } catch (err) {
         console.error("Failed fetching system users:", err);
         setError("Could not parse user directory profiles. Ensure you have admin clearances.");
@@ -33,38 +46,30 @@ export default function AllUsers() {
       }
     };
 
-    fetchAllUsers();
-  }, []);
+    fetchUsers();
+  }, [currentPage, searchTerm, planFilter]); // 🚀 Trigger backend request on filter or page change
 
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
-    setCurrentPage(1);
+    setCurrentPage(1); // Reset to page 1 when searching
   };
 
   const handlePlanFilterChange = (e) => {
     setPlanFilter(e.target.value);
-    setCurrentPage(1);
+    setCurrentPage(1); // Reset to page 1 when filtering
   };
 
-  const filteredUsers = users.filter((account) => {
-    const name = account.fullname ? account.fullname.toLowerCase() : '';
-    const email = account.email ? account.email.toLowerCase() : '';
-    const matchSearch = name.includes(searchTerm.toLowerCase()) || email.includes(searchTerm.toLowerCase());
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
 
-    let matchPlan = true;
-    if (planFilter === 'PREMIUM') {
-      matchPlan = account.is_subscribed === true;
-    } else if (planFilter === 'PAY_AS_GO') {
-      matchPlan = account.is_subscribed === false;
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage); // ✅ Just update state without touching scroll position
     }
+  };
 
-    return matchSearch && matchPlan;
-  });
-
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentUsers = filteredUsers.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  // Calculate showing index for metadata display
+  const indexOfFirstItem = (currentPage - 1) * itemsPerPage + 1;
+  const indexOfLastItem = Math.min(currentPage * itemsPerPage, totalCount);
 
   return (
     <>
@@ -113,12 +118,13 @@ export default function AllUsers() {
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-semibold">
               {error}
             </div>
-          ) : filteredUsers.length === 0 ? (
+          ) : users.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center shadow-sm">
               <span className="text-5xl block mb-4">👥</span>
               <h3 className="text-lg font-bold text-slate-900">No Matching Users</h3>
               <p className="text-gray-400 text-sm mt-1">We couldn't locate any accounts matching your search inputs or active plan filter.</p>
               <button 
+                type="button"
                 onClick={() => { setSearchTerm(''); setPlanFilter('ALL'); setCurrentPage(1); }}
                 className="mt-5 text-xs font-bold text-violet-600 hover:underline cursor-pointer bg-transparent border-0 outline-none p-0"
               >
@@ -139,7 +145,8 @@ export default function AllUsers() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-sm">
-                    {currentUsers.map((account) => (
+                    {/* Render users directly from API state */}
+                    {users.map((account) => (
                       <tr key={account.id} className="hover:bg-slate-50 transition group">
                         <td className="px-6 py-4 font-semibold text-slate-800 group-hover:text-violet-600 transition">
                           {account.fullname || 'Anonymous User'}
@@ -163,6 +170,7 @@ export default function AllUsers() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <button
+                            type="button"
                             onClick={() => navigate(`/admin/users/${account.id}`)}
                             className="text-xs font-bold text-violet-600 bg-violet-50 hover:bg-violet-100 px-3 py-1.5 rounded-lg transition cursor-pointer"
                           >
@@ -175,26 +183,48 @@ export default function AllUsers() {
                 </table>
               </div>
 
-              <div className="bg-slate-50/70 px-6 py-4 border-t border-slate-200 flex items-center justify-between gap-4">
+              {/* PAGINATION CONTROLS */}
+              <div className="bg-slate-50/70 px-6 py-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="text-xs text-gray-500 font-medium">
-                  Showing <span className="font-bold text-slate-700">{indexOfFirstItem + 1}</span> to{' '}
-                  <span className="font-bold text-slate-700">{Math.min(indexOfLastItem, filteredUsers.length)}</span> of{' '}
-                  <span className="font-bold text-slate-700">{filteredUsers.length}</span> total users
+                  Showing <span className="font-bold text-slate-700">{indexOfFirstItem}</span> to{' '}
+                  <span className="font-bold text-slate-700">{indexOfLastItem}</span> of{' '}
+                  <span className="font-bold text-slate-700">{totalCount}</span> total users
                 </div>
 
                 {totalPages > 1 && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    {/* Previous Button */}
                     <button
-                      onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                      type="button"
+                      onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
-                      className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition cursor-pointer disabled:cursor-not-allowed"
+                      className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 transition cursor-pointer disabled:cursor-not-allowed"
                     >
                       Previous
                     </button>
+
+                    {/* Page Number Buttons */}
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() => handlePageChange(page)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                          currentPage === page
+                            ? 'bg-black text-white border border-black'
+                            : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+
+                    {/* Next Button */}
                     <button
-                      onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                      type="button"
+                      onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages}
-                      className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition cursor-pointer disabled:cursor-not-allowed"
+                      className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 transition cursor-pointer disabled:cursor-not-allowed"
                     >
                       Next
                     </button>

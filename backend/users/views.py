@@ -21,6 +21,9 @@ from django.conf import settings
 from groq import Groq 
 import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
+from rest_framework.generics import ListAPIView
+from rest_framework.pagination import PageNumberPagination
+from django.db.models import Q
 
 # Create your views here.
 
@@ -414,17 +417,38 @@ class ConfirmEmailUpdateView(APIView):
 
 
 #Admin Views
-class AdminAllUsersView(APIView):
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 8
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+class AdminAllUsersView(ListAPIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
+    serializer_class = UserAdminSerializer
+    pagination_class = StandardResultsSetPagination
 
-    def get(self, request, *args, **kwargs):
-        try:
-            users = User.objects.all().order_by('-id')
-            serializer = UserAdminSerializer(users, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"detail": f"Failed fetching system user directory: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    def get_queryset(self):
+        # Base Queryset
+        queryset = User.objects.all().order_by('-id')
 
+        # 1. Read Query Parameters
+        search_query = self.request.query_params.get('search', '').strip()
+        plan_filter = self.request.query_params.get('plan', 'ALL').strip().upper()
+
+        # 2. Apply Search Filter (Name or Email)
+        if search_query:
+            queryset = queryset.filter(
+                Q(fullname__icontains=search_query) | 
+                Q(email__icontains=search_query)
+            )
+
+        # 3. Apply Subscription Plan Filter
+        if plan_filter == 'PREMIUM':
+            queryset = queryset.filter(is_subscribed=True)
+        elif plan_filter == 'PAY_AS_GO':
+            queryset = queryset.filter(is_subscribed=False)
+
+        return queryset
 
 class AdminUserDetailsView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
