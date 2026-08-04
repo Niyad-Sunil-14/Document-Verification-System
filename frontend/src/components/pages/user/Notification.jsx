@@ -40,7 +40,12 @@ export default function NotificationsPage() {
   const handleMarkAllRead = async () => {
     try {
       await axiosInstance.patch('documents/notifications/');
+      
+      // 1. Update local state
       setNotifications(notifications.map(n => ({ ...n, is_read: true })));
+
+      // 2. Broadcast event to update Navbar immediately
+      window.dispatchEvent(new Event('notificationsUpdated'));
     } catch (err) {
       console.error("Failed to clear notifications:", err);
     }

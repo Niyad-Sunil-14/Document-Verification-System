@@ -30,20 +30,31 @@ export default function Navbar() {
   const hasFetchedRef = useRef(false);
 
   useEffect(() => {
-    // Prevent duplicate fetching on re-renders or Strict Mode remounts
-    if (hasFetchedRef.current || !user) return;
-    hasFetchedRef.current = true;
+    if (!user) return;
 
     const fetchNotifications = async () => {
       try {
         const response = await axiosInstance.get('documents/notifications/?limit=3');
         setNotifications(response.data);
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching navbar notifications:", err);
       }
     };
 
+    // 1. Initial Fetch
     fetchNotifications();
+
+    // 2. Listen for manual update events (e.g., Mark All Read from NotificationsPage)
+    const handleUpdate = () => fetchNotifications();
+    window.addEventListener('notificationsUpdated', handleUpdate);
+
+    // 3. Real-time Polling: Check for new incoming notifications every 15 seconds
+    const intervalId = setInterval(fetchNotifications, 15000);
+
+    return () => {
+      window.removeEventListener('notificationsUpdated', handleUpdate);
+      clearInterval(intervalId);
+    };
   }, [user]);
 
   const hasUnread = notifications.some(n => !n.is_read);
