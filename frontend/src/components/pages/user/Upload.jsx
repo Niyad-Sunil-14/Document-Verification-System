@@ -3,26 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
 import axiosInstance from '../../../api/Axiosinstance';
 import { loadRazorpayScript } from '../../../utils/loadRazorpay';
-import { useUser } from '../../../context/UserContext'; // 1. IMPORT USER CONTEXT
+import { useUser } from '../../../context/UserContext';
+import imageCompression from 'browser-image-compression';
 
 export default function Upload() {
   const navigate = useNavigate();
-
-  // 2. READ USER & REFRESH PROFILE DIRECTLY FROM CONTEXT (No local state/fetch needed!)
   const { user, refreshProfile } = useUser();
 
-  // 3. PAGE-SPECIFIC STATES ONLY
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isPdf, setIsPdf] = useState(false); 
   const [documentType, setDocumentType] = useState('INVOICE');
   const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState({ text: '', isError: false });
-  
-  // Tracks specific sub-stages of checkout vs file transmission
-  const [paymentStage, setPaymentStage] = useState('IDLE'); // IDLE, INITIATED, SUCCESS
+  const [paymentStage, setPaymentStage] = useState('IDLE');
 
-  // DETECT FILE TYPE & MANAGE PREVIEW BLOB
   useEffect(() => {
     if (!file) {
       setPreviewUrl(null);
@@ -50,7 +45,24 @@ export default function Upload() {
     }
   };
 
-  // OPTIMIZED PAYMENT & FILE TRANSMISSION WORKFLOW
+  // Helper function to compress images before upload
+  const getPreparedFile = async (rawFile) => {
+    if (!isPdf && rawFile.type.startsWith('image/')) {
+      const options = {
+        maxSizeMB: 0.8,
+        maxWidthOrHeight: 1920,
+        useWebWorker: true,
+      };
+      try {
+        return await imageCompression(rawFile, options);
+      } catch (err) {
+        console.warn("Compression skipped, using original file:", err);
+        return rawFile;
+      }
+    }
+    return rawFile;
+  };
+
   const handlePaymentAndUpload = async (e) => {
     e.preventDefault();
 
@@ -59,23 +71,24 @@ export default function Upload() {
       return;
     }
 
-    // 🚀 BYPASS GATEWAY OPTIMIZATION: Check if user has available credits
+    // 🚀 CASE A: CREDIT-BASED INSTANT UPLOAD
     if (user && user.document_credits > 0) {
       try {
         setIsUploading(true);
         setMessage({ text: '', isError: false });
-        setPaymentStage('SUCCESS'); // Jump right into submission parsing stage
+        setPaymentStage('SUCCESS');
+
+        const fileToUpload = await getPreparedFile(file);
 
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('file', fileToUpload);
         formData.append('document_type', documentType);
-        formData.append('use_credit', 'true'); // Flag letting backend know to subtract a credit token
+        formData.append('use_credit', 'true');
 
         await axiosInstance.post('documents/upload/', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
 
-        // Sync global user state so remaining credits update everywhere
         if (refreshProfile) {
           await refreshProfile();
         }
@@ -85,7 +98,7 @@ export default function Upload() {
 
         setTimeout(() => {
           navigate('/documents'); 
-        }, 2000);
+        }, 1500);
 
       } catch (uploadErr) {
         console.error("Credit extraction pipeline crash:", uploadErr);
@@ -96,10 +109,10 @@ export default function Upload() {
         setIsUploading(false);
         setPaymentStage('IDLE');
       }
-      return; // Stop function loop early to skip payment module setup
+      return;
     }
 
-    // 💳 FALLBACK ROADMAP: Standard Pay-As-You-Verify process when credits run empty
+    // 💳 CASE B: PAY-AS-YOU-VERIFY GATEWAY FLOW
     try {
       setIsUploading(true);
       setMessage({ text: '', isError: false });
@@ -126,15 +139,15 @@ export default function Upload() {
         name: 'DocVerify System',
         description: `${documentType.replace(/_/g, ' ')} Processing Fee`,
         order_id: order_id,
-        notes: {
-          plan_type: "pay_as_you_verify" 
-        },
+        notes: { plan_type: "pay_as_you_verify" },
         handler: async function (paymentInfo) {
           try {
             setPaymentStage('SUCCESS');
             
+            const fileToUpload = await getPreparedFile(file);
+
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append('file', fileToUpload);
             formData.append('document_type', documentType);
             formData.append('razorpay_payment_id', paymentInfo.razorpay_payment_id);
             formData.append('razorpay_order_id', paymentInfo.razorpay_order_id);
@@ -144,7 +157,6 @@ export default function Upload() {
               headers: { 'Content-Type': 'multipart/form-data' },
             });
 
-            // Sync global user state in case payment rewarded user credits
             if (refreshProfile) {
               await refreshProfile();
             }
@@ -154,12 +166,12 @@ export default function Upload() {
 
             setTimeout(() => {
               navigate('/user-dashboard'); 
-            }, 2000);
+            }, 1500);
 
           } catch (uploadErr) {
-            console.error("File upload sequence crash after payment confirmation:", uploadErr);
+            console.error("File upload crash post-payment:", uploadErr);
             setMessage({ 
-              text: uploadErr.response?.data?.detail || 'Payment was captured, but server storage verification registration timed out.', 
+              text: uploadErr.response?.data?.detail || 'Payment captured, but document upload timed out.', 
               isError: true 
             });
             setIsUploading(false);
@@ -169,9 +181,7 @@ export default function Upload() {
           name: user_details?.fullname || user?.fullname || '',
           email: user_details?.email || user?.email || '',
         },
-        theme: {
-          color: '#4f46e5', 
-        },
+        theme: { color: '#4f46e5' },
         modal: {
           ondismiss: async function () {
             setIsUploading(false);
@@ -183,7 +193,7 @@ export default function Upload() {
                 plan_type: 'PAY_AS_YOU_VERIFY'
               });
             } catch (err) {
-              console.error("Failed to register payment drop on server:", err);
+              console.error("Failed to log payment drop:", err);
             }
           }
         }
@@ -193,9 +203,9 @@ export default function Upload() {
       rzpWindow.open();
 
     } catch (err) {
-      console.error("File ingestion pipeline clearing rails error:", err);
+      console.error("Payment setup error:", err);
       setMessage({ 
-        text: err.response?.data?.detail || 'Failed to initialize payment infrastructure order parameters.', 
+        text: err.response?.data?.detail || 'Failed to initialize payment order parameters.', 
         isError: true 
       });
       setIsUploading(false);
@@ -204,11 +214,8 @@ export default function Upload() {
   };
 
   return (
-    /* 🚀 FIXED: Dynamic viewport color transitions for dark mode support */
     <div className="min-h-screen bg-slate-50/50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans antialiased transition-colors duration-200">
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
-        
-        {/* HEADER SECTION */}
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Upload Your Document</h1>
@@ -222,23 +229,17 @@ export default function Upload() {
           </button>
         </div>
 
-        {/* CORE FORM MODULE */}
-        {/* 🚀 FIXED: Re-styled card body elements for dual styling states */}
         <div className="bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 shadow-sm rounded-2xl p-6 sm:p-8 transition-colors duration-200">
-          
-          {/* Visual Credits Indicator Badge */}
-          {user && user.document_credits > 0 ? (
+          {user && user.document_credits > 0 && (
             <div className="mb-6 p-3 bg-violet-50 border border-violet-100 dark:bg-violet-950/30 dark:border-violet-900/50 rounded-xl flex justify-between items-center text-xs text-violet-700 dark:text-violet-400 font-medium transition-colors">
               <span>Available Document Upload Balance:</span>
               <span className="bg-violet-600 dark:bg-violet-500 text-white font-bold px-2.5 py-1 rounded-md">
                 {user.document_credits} Credits
               </span>
             </div>
-          ): ""}
+          )}
 
           <form onSubmit={handlePaymentAndUpload} className="space-y-6">
-            
-            {/* CLASSIFICATION CONFIG */}
             <div>
               <label htmlFor="docType" className="block text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
                 Document Classification Type
@@ -263,19 +264,14 @@ export default function Upload() {
               </select>
             </div>
 
-            {/* DROPZONE SELECTION CONTAINER */}
             <div>
               <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
                 File Binary Attachment
               </label>
               
-              {/* 🚀 FIXED: File drop container adapts cleanly to dark layouts */}
               <div className="border-2 border-dashed border-slate-200 hover:border-violet-400 dark:border-slate-700 dark:hover:border-violet-500 rounded-2xl p-8 bg-slate-50/40 dark:bg-slate-900/30 transition relative flex flex-col items-center justify-center text-center min-h-[260px]">
-                
                 {file ? (
                   <div className="space-y-4 w-full flex flex-col items-center relative z-10">
-                    
-                    {/* DYNAMIC CONDITIONAL PREVIEW PORTAL */}
                     {isPdf ? (
                       <div className="w-32 h-40 bg-rose-50 border border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/40 rounded-xl shadow-md flex flex-col items-center justify-center p-4">
                         <span className="text-4xl">📕</span>
@@ -327,7 +323,6 @@ export default function Upload() {
               </div>
             </div>
 
-            {/* NOTIFICATION MESSAGING CONTAINER */}
             {message.text && (
               <div className="flex justify-center items-center pt-2">
                 <div className={`w-full max-w-md p-4 rounded-xl border text-sm font-bold text-center shadow-sm flex items-center justify-center space-x-2 ${
@@ -340,7 +335,6 @@ export default function Upload() {
               </div>
             )}
 
-            {/* FORM SUBMIT ACTION BUTTON ROW */}
             <div className="pt-2">
               <button
                 type="submit"
@@ -362,10 +356,8 @@ export default function Upload() {
                 )}
               </button>
             </div>
-
           </form>
         </div>
-
       </main>
     </div>
   );

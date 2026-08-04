@@ -61,8 +61,67 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from .models import Document, Payment, Notification  # 🚀 Added Notification import
+import threading  
 
 # Keep your logger and pre-processing utility imports/functions here...
+
+def process_ocr_in_background(document_id, temp_filename, is_pdf_file):
+    """
+    Runs Tesseract OCR in a separate thread so the user gets an instant HTTP 201 response.
+    """
+    try:
+        processed_image = None
+        text = ""
+        ocr_accuracy_score = 0.0
+
+        if is_pdf_file:
+            pages = convert_from_path(temp_filename, first_page=1, last_page=1)
+            if pages:
+                opencv_img = pil_to_opencv(pages[0])
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as img_temp:
+                    cv2.imwrite(img_temp.name, opencv_img)
+                    processed_image = preprocess_image_for_ocr(img_temp.name)
+                    try:
+                        os.remove(img_temp.name)
+                    except Exception:
+                        pass
+        else:
+            processed_image = preprocess_image_for_ocr(temp_filename)
+
+        if processed_image is not None:
+            tesseract_custom_config = r'--oem 3 --psm 3 -c preserve_interword_spaces=1'
+            text = pytesseract.image_to_string(processed_image, config=tesseract_custom_config)
+            ocr_data = pytesseract.image_to_data(processed_image, output_type=Output.DICT, config=tesseract_custom_config)
+
+            valid_confidences = [int(c) for c in ocr_data['conf'] if int(c) > -1]
+            if valid_confidences:
+                ocr_accuracy_score = round(sum(valid_confidences) / len(valid_confidences), 2)
+                pipeline_status = "PROCESSED"
+            else:
+                pipeline_status = "FAILED"
+        else:
+            pipeline_status = "FAILED"
+
+        # Update the Document instance once background OCR is complete
+        Document.objects.filter(id=document_id).update(
+            ocr_status=pipeline_status,
+            ocr_accuracy=ocr_accuracy_score,
+            extracted_text=text.strip() if text else ""
+        )
+        logger.info(f"✅ Background OCR completed for Document ID: {document_id}")
+
+    except Exception as err:
+        logger.error(f"🚨 Background OCR failed for Document ID {document_id}: {err}")
+        Document.objects.filter(id=document_id).update(ocr_status="FAILED")
+
+    finally:
+        if temp_filename and os.path.exists(temp_filename):
+            try:
+                os.remove(temp_filename)
+            except Exception:
+                pass
+
+
 
 class DocumentSummaryView(APIView):
     permission_classes = [IsAuthenticated]
@@ -89,17 +148,15 @@ class DocumentUploadView(APIView):
 
     def post(self, request, *args, **kwargs):
         user = request.user
-        
-        # Check if the frontend requested to skip the gateway via an available credit token
         use_credit = request.data.get('use_credit') == 'true'
         
         serializer = DocumentUploadSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # =================================================================
+        # -----------------------------------------------------------------
         # STEP A: BILLING SECURITY & CREDIT BALANCE GUARD LAYER
-        # =================================================================
+        # -----------------------------------------------------------------
         rzp_order_id = serializer.validated_data.get('razorpay_order_id')
         rzp_payment_id = serializer.validated_data.get('razorpay_payment_id')
         rzp_signature = serializer.validated_data.get('razorpay_signature')
@@ -107,16 +164,13 @@ class DocumentUploadView(APIView):
         if use_credit:
             with transaction.atomic():
                 current_user = request.user.__class__.objects.select_for_update().get(id=user.id)
-                
                 if current_user.document_credits <= 0:
                     return Response(
                         {"detail": "Out of account credits. Please purchase a plan or use Pay-As-You-Verify."},
                         status=status.HTTP_402_PAYMENT_REQUIRED
                     )
-
                 current_user.document_credits -= 1
                 current_user.save()
-                logger.info(f"🪙 1 Account credit token deducted for User ID: {user.id}")
         else:
             if not user.is_subscribed and user.document_credits <= 0:
                 if not all([rzp_order_id, rzp_payment_id, rzp_signature]):
@@ -134,87 +188,29 @@ class DocumentUploadView(APIView):
                         'razorpay_signature': rzp_signature
                     }
                     client.utility.verify_payment_signature(verification_payload)
-                    logger.info(f"🛡️ Razorpay Payment verified for Order ID: {rzp_order_id}")
                 except Exception as pay_err:
-                    logger.error(f"🚨 Payment Signature Integrity Check Failed: {pay_err}")
                     return Response(
                         {"detail": "Payment security validation signature mismatch. Processing terminated."}, 
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-        # =================================================================
-        # STEP B: CORE OCR PIPELINE MANAGEMENT
-        # =================================================================
+        # -----------------------------------------------------------------
+        # STEP B: CLOUDINARY FILE UPLOAD & TEMP SAVE
+        # -----------------------------------------------------------------
         uploaded_file = request.FILES['file']
         document_type = serializer.validated_data.get('document_type', '')
         original_filename = uploaded_file.name
-        
         is_pdf_file = original_filename.lower().endswith('.pdf')
-        text = ""
-        ocr_accuracy_score = 0.0
-        ocr_pipeline_status = "PENDING"
-        
-        temp_filename = None
-        try:
-            suffix = os.path.splitext(original_filename)[1]
-            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
-                for chunk in uploaded_file.chunks():
-                    temp_file.write(chunk)
-                temp_filename = temp_file.name
 
-            processed_image = None
-
-            if is_pdf_file:
-                logger.info(f"Converting PDF {original_filename} pages to image elements...")
-                pages = convert_from_path(temp_filename, first_page=1, last_page=1)
-                
-                if pages:
-                    opencv_img = pil_to_opencv(pages[0])
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as img_temp:
-                        cv2.imwrite(img_temp.name, opencv_img)
-                        processed_image = preprocess_image_for_ocr(img_temp.name)
-                        try:
-                            os.remove(img_temp.name)
-                        except:
-                            pass
-            else:
-                processed_image = preprocess_image_for_ocr(temp_filename)
-
-            if processed_image is not None:
-                # 🚀 FIX: Pass explicit configuration matrices (--psm 3 for dynamic layout auto-detection)
-                # `--oem 3` forces the use of the advanced LSTM deep learning OCR engine
-                tesseract_custom_config = r'--oem 3 --psm 3 -c preserve_interword_spaces=1'
-                
-                text = pytesseract.image_to_string(processed_image, config=tesseract_custom_config)
-                ocr_data = pytesseract.image_to_data(processed_image, output_type=Output.DICT, config=tesseract_custom_config)
-                
-                valid_confidences = [int(c) for c in ocr_data['conf'] if int(c) > -1]
-                if valid_confidences:
-                    calculated_accuracy = sum(valid_confidences) / len(valid_confidences)
-                    ocr_accuracy_score = round(calculated_accuracy, 2)
-                    ocr_pipeline_status = "PROCESSED"
-                else:
-                    ocr_pipeline_status = "FAILED"
-            else:
-                ocr_pipeline_status = "FAILED"
-
-        except Exception as ocr_err:
-            logger.error(f"OCR Pipeline failed: {ocr_err}")
-            ocr_accuracy_score = 0.0
-            ocr_pipeline_status = "FAILED"
-        
-        finally:
-            if temp_filename and os.path.exists(temp_filename):
-                try:
-                    os.remove(temp_filename)
-                except Exception as e:
-                    logger.error(f"Failed to delete temp file {temp_filename}: {e}")
+        # Save temporary file for background OCR process
+        suffix = os.path.splitext(original_filename)[1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+            for chunk in uploaded_file.chunks():
+                temp_file.write(chunk)
+            temp_filename = temp_file.name
 
         uploaded_file.seek(0)
 
-        # =================================================================
-        # STEP C: STORAGE ROUTING & MODEL RECORD ENTRIES
-        # =================================================================
         try:
             cloudinary.config(
                 cloud_name=env('CLOUDINARY_CLOUD_NAME'),
@@ -224,16 +220,15 @@ class DocumentUploadView(APIView):
             )
             
             determined_resource_type = "raw" if is_pdf_file else "image"
-            logger.info(f"Uploading file {original_filename} to Cloudinary...")
             
             upload_result = cloudinary.uploader.upload(
                 uploaded_file,
                 folder="user_documents/",
                 resource_type=determined_resource_type
             )
-            
             secure_url = upload_result.get("secure_url")
-            
+
+            # Create document with status "PENDING" and ocr_status "PROCESSING"
             with transaction.atomic():
                 document = Document.objects.create(
                     user=request.user,
@@ -241,16 +236,15 @@ class DocumentUploadView(APIView):
                     file=secure_url,
                     filename=original_filename, 
                     status="PENDING",
-                    ocr_status=ocr_pipeline_status,
-                    ocr_accuracy=ocr_accuracy_score,
-                    extracted_text=text.strip() if text else "",
+                    ocr_status="PROCESSING",  # 👈 Initial state
+                    ocr_accuracy=0.0,
+                    extracted_text="",
                     razorpay_order_id=rzp_order_id if rzp_order_id else "",
                     razorpay_payment_id=rzp_payment_id if rzp_payment_id else "",
                     payment_verified=True
                 )
 
                 if not use_credit:
-                    # 1. Create the payment record entry tracking row
                     Payment.objects.create(
                         user=request.user,
                         plan_type='PAY_AS_YOU_VERIFY',
@@ -262,18 +256,21 @@ class DocumentUploadView(APIView):
                         document=document
                     )
                     
-                    # 🚀 2. FIRE SUCCESS NOTIFICATION (Only runs for Pay-As-You-Verify paths)
-                    # The title matching structure maps perfectly to your new credit card layout icon!
                     Notification.objects.create(
                         user=request.user,
                         title="✅ Payment Success",
                         description=f"Payment received for verifying '{original_filename}'. The document analysis has been started.",
                         document=document,
                         is_read=False
-                    )    
-        
-            logger.info(f"🎉 File {original_filename} successfully saved and marked as PROCESSED in database.")
+                    )
 
+            # 🚀 STEP C: LAUNCH HEAVY OCR IN A SEPARATE THREAD
+            threading.Thread(
+                target=process_ocr_in_background,
+                args=(document.id, temp_filename, is_pdf_file)
+            ).start()
+
+            # ⚡ IMMEDIATELY RETURN RESPONSE (Does not wait for OCR to finish!)
             return Response(
                 {
                     "id": document.id, 
@@ -281,17 +278,18 @@ class DocumentUploadView(APIView):
                     "file": document.file, 
                     "filename": original_filename,
                     "status": document.status,
+                    "ocr_status": "PROCESSING",
                     "payment_verified": True
                 },
                 status=status.HTTP_201_CREATED
             )
-            
+
         except Exception as upload_error:
-            logger.error(f"Cloudinary upload failed: {upload_error}")
+            logger.error(f"Upload failed: {upload_error}")
             return Response(
-                {"error": f"Cloudinary upload failed: {str(upload_error)}"}, 
+                {"error": f"Upload failed: {str(upload_error)}"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            ) 
+            )
 
 
 

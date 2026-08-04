@@ -3,13 +3,16 @@ import { Link, useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
 import axiosInstance from '../../../api/Axiosinstance';
 import { loadRazorpayScript } from '../../../utils/loadRazorpay';
+import { useUser } from '../../../context/UserContext'; // 🚀 1. Import useUser context hook
 
 export default function Pricing() {
   const navigate = useNavigate();
   
+  // 🚀 2. Extract refreshProfile from UserContext
+  const { refreshProfile } = useUser();
+  
   // Track the specific plan identifier string instead of a boolean flag
   const [processingPlan, setProcessingPlan] = useState(null); 
-
 
   // Razorpay Checkout Gateway Implementation
   const handleSubscriptionPayment = async (planType, amountInRupees, planDescription) => {
@@ -51,7 +54,11 @@ export default function Pricing() {
             });
 
             if (verifyResponse.status === 200) {
-              navigate('/user-dashboard');
+              // 🚀 3. Invalidate cache & refresh global user profile/credits
+              await refreshProfile();
+
+              // 🚀 4. Navigate seamlessly without full page reload
+              navigate('/upload');
             }
           } catch (err) {
             console.error('Subscription validation failed:', err);
@@ -152,7 +159,6 @@ export default function Pricing() {
 
   return (
     <>
-      {/* 🚀 FIXED: Dynamic outer viewport context tracking theme switches */}
       <div className="bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 min-h-[calc(100vh-4rem)] py-12 px-4 sm:px-6 lg:px-8 transition-colors duration-200">
         <div className="max-w-6xl mx-auto">
           
@@ -169,7 +175,6 @@ export default function Pricing() {
           {/* Cards Layout Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
             {tiers.map((tier, idx) => (
-              /* 🚀 FIXED: Grid cards layout adaptive configurations for dual theme presentation modes */
               <div 
                 key={idx} 
                 className={`bg-white dark:bg-slate-800 rounded-2xl p-8 flex flex-col justify-between transition border shadow-sm relative ${
