@@ -3,9 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import axiosInstance from '../../../api/Axiosinstance';
 import Navbar from './Navbar';
 import { loadRazorpayScript } from '../../../utils/loadRazorpay';
+import { useUser } from '../../../context/UserContext'; // 🚀 Step 1: Import Context
 
 export default function SubscriptionManagement() {
   const navigate = useNavigate();
+  const { refreshProfile } = useUser(); // 🚀 Step 2: Extract refreshProfile
+
   const [subscription, setSubscription] = useState(null);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +53,9 @@ export default function SubscriptionManagement() {
       setMessage('');
       await axiosInstance.post('documents/users/subscription-cancel/');
       setMessage("Your plan auto-renewal status was modified successfully.");
+      
+      // 🚀 Sync global user context along with local dashboard state
+      if (refreshProfile) await refreshProfile();
       await fetchSubscriptionDashboardData();
     } catch (err) {
       console.error("Cancellation error:", err);
@@ -93,6 +99,12 @@ export default function SubscriptionManagement() {
               razorpay_order_id: paymentResponse.razorpay_order_id,
               razorpay_signature: paymentResponse.razorpay_signature,
             });
+
+            // 🚀 Step 3: Trigger global UserContext profile refresh to update credits & pass status
+            if (refreshProfile) {
+              await refreshProfile();
+            }
+
             setMessage("Transaction verified! Welcome to your upgraded system features.");
             await fetchSubscriptionDashboardData();
           } catch (verErr) {
@@ -132,7 +144,6 @@ export default function SubscriptionManagement() {
   };
 
   return (
-    /* 🚀 FIXED: Global dynamic layout adjustments for smooth light/dark theme tracking transforms */
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans antialiased relative transition-colors duration-200">
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -164,7 +175,6 @@ export default function SubscriptionManagement() {
           <div className="space-y-10">
             
             {/* PREMIUM HERO CONTAINER STATE CARD */}
-            {/* 🚀 FIXED: Background layouts dynamically invert and hide graphic lines appropriately inside slate panels */}
             <div className="bg-white border border-slate-200/80 dark:bg-slate-800 dark:border-slate-700 shadow-md rounded-2xl p-6 relative overflow-hidden flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 transition-colors">
               <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-indigo-50/60 via-purple-50/30 dark:from-indigo-950/20 dark:via-purple-950/10 to-transparent rounded-bl-full -z-0 opacity-80" />
               
@@ -229,7 +239,6 @@ export default function SubscriptionManagement() {
                     const isRowTrulyExpired = isTimeExpired || isNotTheLatestActiveRow;
                     
                     return (
-                      /* 🚀 FIXED: Inner table feeds display items with precise variable background tones */
                       <div 
                         key={pay.id}
                         className="bg-white border border-slate-200/70 dark:bg-slate-800 dark:border-slate-700/80 rounded-2xl p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-150 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
@@ -237,7 +246,6 @@ export default function SubscriptionManagement() {
                         {/* Info Block Left */}
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-2.5">
-                            
                             <div className={`w-2 h-2 rounded-full shadow-sm ${
                               pay.status !== 'SUCCESS' 
                                 ? 'bg-rose-500' 
@@ -307,7 +315,6 @@ export default function SubscriptionManagement() {
       </main>
 
       {/* PREMIUM MODAL OVERLAY COMPONENT DIALOG PANEL */}
-      {/* 🚀 FIXED: Alert Modal elements updated to dark parameters with fine border separation controls */}
       {isCancelModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white border border-slate-100 dark:bg-slate-800 dark:border-slate-700 p-6 max-w-sm w-full shadow-2xl space-y-4 rounded-2xl transition-colors">
