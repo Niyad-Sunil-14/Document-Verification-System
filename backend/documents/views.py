@@ -764,22 +764,59 @@ class SubscriptionDetailsView(APIView):
 
 class CancelSubscriptionView(APIView):
     """
-    Turns off active access parameters or flags for the user layout.
+    Cancels auto-renewal for a specific payment purchase or marks the plan iteration as cancelled
+    without prematurely wiping existing valid credit days.
     """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         user = request.user
-        user.is_subscribed = False
-        user.subscription_expires_at = timezone.now() # Mark as immediately expired
-        user.save()
-        
+        payment_id = request.data.get('payment_id')
+        plan_type = request.data.get('plan_type')
+
+        target_payment = None
+
+        # 1. Target specific Payment if payment_id is supplied by frontend
+        if payment_id:
+            target_payment = Payment.objects.filter(id=payment_id, user=user).first()
+        elif plan_type:
+            target_payment = Payment.objects.filter(
+                user=user, 
+                plan_type=plan_type.upper(), 
+                status='SUCCESS'
+            ).order_by('-created_at').first()
+
+        # 2. Flag the specific payment as cancelled (Ensure `is_cancelled` boolean exists on Payment model)
+        if target_payment:
+            target_payment.is_cancelled = True
+            target_payment.save()
+            canceled_plan_label = target_payment.get_plan_type_display() if hasattr(target_payment, 'get_plan_type_display') else target_payment.plan_type
+        else:
+            canceled_plan_label = "Subscription Plan"
+
+        # 3. Check if user has any OTHER active, un-cancelled payments remaining
+        # If no active un-cancelled payments exist, update global user flags
+        active_remaining_payments = Payment.objects.filter(
+            user=user,
+            status='SUCCESS',
+            is_cancelled=False,
+            created_at__gte=timezone.now() - timedelta(days=30)
+        ).exists()
+
+        if not active_remaining_payments:
+            user.is_subscribed = False
+            user.save()
+
+        # 4. Notify user
         Notification.objects.create(
             user=user,
-            title="🛑 Subscription Cancelled",
-            description="Your premium recurring membership limits have been successfully turned off."
+            title="🛑 Subscription Renewal Cancelled",
+            description=f"Auto-renewal for your {canceled_plan_label.replace('_', ' ').title()} has been disabled."
         )
-        return Response({"detail": "Subscription successfully cancelled."}, status=status.HTTP_200_OK)
+
+        return Response({
+            "detail": f"Subscription for {canceled_plan_label} was successfully cancelled."
+        }, status=status.HTTP_200_OK)
 
 
 
@@ -924,7 +961,8 @@ class PaymentHistoryListView(APIView):
                 "razorpay_order_id": payment.razorpay_order_id,
                 "razorpay_payment_id": payment.razorpay_payment_id if payment.razorpay_payment_id else "N/A",
                 "created_at": payment.created_at.strftime("%Y-%m-%d %H:%M"),
-                "status": payment.status, # 🔥 Added status tracking string
+                "status": payment.status,
+                "is_cancelled": getattr(payment, 'is_cancelled', False),  # 🚀 ADD THIS FIELD
                 "filename": payment.document.filename if payment.document else "Subscription Plan"
             })
             

@@ -143,6 +143,7 @@ class Payment(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2) 
     currency = models.CharField(max_length=10, default='INR')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    is_cancelled = models.BooleanField(default=False)
     
     # Razorpay Transaction Identifiers
     razorpay_order_id = models.CharField(max_length=255, unique=True, null=True, blank=True)

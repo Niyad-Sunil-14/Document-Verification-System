@@ -7,7 +7,7 @@ export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 🚀 Read global user state directly from Context
+  // Read global user state directly from Context
   const { user } = useUser();
 
   // State for notifications
@@ -27,35 +27,42 @@ export default function Navbar() {
     }`;
   };
 
-  const hasFetchedRef = useRef(false);
+  const fetchNotifications = async () => {
+    if (!user) return;
+    try {
+      // Reduced payload limit to 5 records for dropdown preview
+      const response = await axiosInstance.get('documents/notifications/?limit=3');
+      setNotifications(response.data);
+    } catch (err) {
+      console.error("Error fetching navbar notifications:", err);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
 
-    const fetchNotifications = async () => {
-      try {
-        const response = await axiosInstance.get('documents/notifications/?limit=3');
-        setNotifications(response.data);
-      } catch (err) {
-        console.error("Error fetching navbar notifications:", err);
-      }
-    };
-
-    // 1. Initial Fetch
+    // 1. Single Initial Fetch on mount
     fetchNotifications();
 
-    // 2. Listen for manual update events (e.g., Mark All Read from NotificationsPage)
+    // 2. Listen for custom window event (e.g. dispatched when marking items as read elsewhere)
     const handleUpdate = () => fetchNotifications();
     window.addEventListener('notificationsUpdated', handleUpdate);
 
-    // 3. Real-time Polling: Check for new incoming notifications every 15 seconds
-    const intervalId = setInterval(fetchNotifications, 15000);
-
     return () => {
       window.removeEventListener('notificationsUpdated', handleUpdate);
-      clearInterval(intervalId);
     };
   }, [user]);
+
+  const toggleNotificationDropdown = () => {
+    const nextState = !isNotificationOpen;
+    setIsNotificationOpen(nextState);
+    setIsProfileOpen(false);
+
+    // Refetch notifications on user click if opening dropdown
+    if (nextState) {
+      fetchNotifications();
+    }
+  };
 
   const hasUnread = notifications.some(n => !n.is_read);
 
@@ -100,10 +107,7 @@ export default function Navbar() {
             {/* NOTIFICATION ITEM */}
             <div className="relative">
               <button 
-                onClick={() => {
-                  setIsNotificationOpen(!isNotificationOpen);
-                  setIsProfileOpen(false);
-                }}
+                onClick={toggleNotificationDropdown}
                 className="p-1.5 text-gray-400 hover:text-gray-500 dark:text-slate-400 dark:hover:text-slate-200 rounded-full hover:bg-slate-50 dark:hover:bg-slate-700/50 transition relative focus:outline-none cursor-pointer"
               >
                 <span className="sr-only">Notification</span>

@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import axiosInstance from '../../../api/Axiosinstance';
 import Navbar from './Navbar';
 import { loadRazorpayScript } from '../../../utils/loadRazorpay';
-import { useUser } from '../../../context/UserContext'; // 🚀 Step 1: Import Context
+import { useUser } from '../../../context/UserContext';
 
 export default function SubscriptionManagement() {
   const navigate = useNavigate();
-  const { refreshProfile } = useUser(); // 🚀 Step 2: Extract refreshProfile
+  const { refreshProfile } = useUser();
 
   const [subscription, setSubscription] = useState(null);
   const [paymentHistory, setPaymentHistory] = useState([]);
@@ -16,7 +16,8 @@ export default function SubscriptionManagement() {
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  // 🚀 Track the specific plan/item target for cancellation modal
+  const [targetCancelItem, setTargetCancelItem] = useState(null);
 
   const fetchSubscriptionDashboardData = async () => {
     try {
@@ -45,16 +46,26 @@ export default function SubscriptionManagement() {
     fetchSubscriptionDashboardData();
   }, []);
 
+  // 🚀 Updated: Pass specific identifier (id or plan_type) to the backend payload
   const handleConfirmCancel = async () => {
-    setIsCancelModalOpen(false);
+    if (!targetCancelItem) return;
+    
+    const itemToCancel = targetCancelItem;
+    setTargetCancelItem(null);
     
     try {
       setActionLoading(true);
       setMessage('');
-      await axiosInstance.post('documents/users/subscription-cancel/');
-      setMessage("Your plan auto-renewal status was modified successfully.");
       
-      // 🚀 Sync global user context along with local dashboard state
+      // Call backend cancel endpoint
+      await axiosInstance.post('documents/users/subscription-cancel/', {
+        payment_id: itemToCancel.id,
+        plan_type: itemToCancel.plan_type
+      });
+
+      setMessage(`${formatPlanDisplay(itemToCancel.plan_type)} renewal status was canceled successfully.`);
+      
+      // 🚀 Refresh both global user context and local list state
       if (refreshProfile) await refreshProfile();
       await fetchSubscriptionDashboardData();
     } catch (err) {
@@ -100,7 +111,6 @@ export default function SubscriptionManagement() {
               razorpay_signature: paymentResponse.razorpay_signature,
             });
 
-            // 🚀 Step 3: Trigger global UserContext profile refresh to update credits & pass status
             if (refreshProfile) {
               await refreshProfile();
             }
@@ -143,6 +153,18 @@ export default function SubscriptionManagement() {
     }).format(amount || 0);
   };
 
+  // Helper check for 30-day limit per purchase
+  const checkIsExpired = (createdAt) => {
+    const purchaseTime = new Date(createdAt).getTime();
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    return Date.now() > (purchaseTime + THIRTY_DAYS_MS);
+  };
+
+  // Filter out active running passes for top list summary
+  const activePasses = paymentHistory.filter(
+    pay => pay.status === 'SUCCESS' && !checkIsExpired(pay.created_at) && !pay.is_cancelled
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans antialiased relative transition-colors duration-200">
 
@@ -150,8 +172,8 @@ export default function SubscriptionManagement() {
         
         {/* Page Header */}
         <div className="mb-10">
-          <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white uppercase">Your Subscription</h1>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Manage your subscriptions, review historical subscriptions, and deploy renewals.</p>
+          <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white uppercase">Your Subscriptions</h1>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Manage active plans, review payment logs, and trigger renewals individually.</p>
         </div>
 
         {/* Dynamic Alerts Feedback */}
@@ -174,52 +196,60 @@ export default function SubscriptionManagement() {
         ) : (
           <div className="space-y-10">
             
-            {/* PREMIUM HERO CONTAINER STATE CARD */}
-            <div className="bg-white border border-slate-200/80 dark:bg-slate-800 dark:border-slate-700 shadow-md rounded-2xl p-6 relative overflow-hidden flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 transition-colors">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-indigo-50/60 via-purple-50/30 dark:from-indigo-950/20 dark:via-purple-950/10 to-transparent rounded-bl-full -z-0 opacity-80" />
+            {/* 🚀 ACTIVE PLANS SUMMARY SECTION */}
+            <div className="space-y-4">
+              <span className="text-[10px] font-extrabold tracking-widest text-indigo-600 dark:text-indigo-400 uppercase block">Active Plans Breakdown</span>
               
-              <div className="space-y-1.5 relative z-10">
-                <span className="text-[10px] font-extrabold tracking-widest text-indigo-600 dark:text-indigo-400 uppercase block">Active Plan</span>
-                <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
-                  {formatPlanDisplay(subscription?.plan_type)}
-                  {subscription?.is_active && (
-                    <span className="px-2 py-0.5 text-[9px] font-black bg-emerald-50 border border-emerald-200 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/50 rounded-md uppercase tracking-wider">
-                      Live
-                    </span>
-                  )}
-                </h2>
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 max-w-md leading-relaxed">
-                  {subscription?.is_active
-                    ? `Premium privileges are fully enabled on this account. Your continuous processing limits will refresh on ${new Date(subscription.expires_at).toLocaleDateString('en-IN')}.`
-                    : "Your profile is sitting on basic standard operational tier structures."}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-4 relative z-10 border-t sm:border-t-0 pt-4 sm:pt-0 border-slate-100 dark:border-slate-700 w-full sm:w-auto">
-                {subscription?.is_active ? (
+              {activePasses.length === 0 ? (
+                <div className="bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 rounded-2xl p-6 text-center shadow-sm">
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400">No active plan passes running currently.</p>
                   <button
-                    disabled={actionLoading}
-                    onClick={() => setIsCancelModalOpen(true)}
-                    className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-700 dark:text-rose-400 rounded-xl transition duration-150 cursor-pointer disabled:opacity-40 select-none shadow-sm outline-none"
-                  >
-                    Cancel Membership
-                  </button>
-                ) : (
-                  <button
-                    disabled={actionLoading}
                     onClick={() => navigate('/pricing')}
-                    className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl shadow-md transition duration-150 cursor-pointer disabled:opacity-40 select-none outline-none border-0"
+                    className="mt-3 px-4 py-2 text-xs font-bold bg-indigo-600 text-white rounded-xl shadow hover:bg-indigo-700 transition"
                   >
                     Activate Premium Pass
                   </button>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {activePasses.map((activeItem) => (
+                    <div 
+                      key={activeItem.id} 
+                      className="bg-white border border-slate-200/80 dark:bg-slate-800 dark:border-slate-700 shadow-md rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between gap-4 transition-colors"
+                    >
+                      <div className="space-y-1 z-10">
+                        <div className="flex items-center justify-between">
+                          <h2 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">
+                            {formatPlanDisplay(activeItem.plan_type)}
+                          </h2>
+                          <span className="px-2 py-0.5 text-[9px] font-black bg-emerald-50 border border-emerald-200 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/50 rounded-md uppercase tracking-wider">
+                            Live
+                          </span>
+                        </div>
+                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                          Expires: {new Date(new Date(activeItem.created_at).getTime() + 30*24*60*60*1000).toLocaleDateString('en-IN')}
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 z-10 flex justify-end">
+                        <button
+                          disabled={actionLoading}
+                          onClick={() => setTargetCancelItem(activeItem)}
+                          className="px-4 py-1.5 text-xs font-bold bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-700 dark:text-rose-400 rounded-xl transition cursor-pointer disabled:opacity-40 shadow-sm outline-none"
+                        >
+                          Cancel Plan
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* HISTORICAL LIST SECTION */}
+            {/* HISTORICAL & ALL PASSES SECTION */}
             <div className="space-y-4">
               <div className="pb-2 border-b border-slate-200 dark:border-slate-700">
-                <h3 className="font-black text-slate-900 dark:text-white text-lg uppercase tracking-tight">Historical Passes</h3>
+                <h3 className="font-black text-slate-900 dark:text-white text-lg uppercase tracking-tight">Historical Passes & Logs</h3>
                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Audit track containing every subscription iteration bound to this account framework.</p>
               </div>
 
@@ -229,14 +259,9 @@ export default function SubscriptionManagement() {
                 </div>
               ) : (
                 <div className="space-y-3.5">
-                  {paymentHistory.map((pay, index) => {
-                    
-                    const purchaseTime = new Date(pay.created_at).getTime();
-                    const expirationThresholdTime = purchaseTime + (30 * 24 * 60 * 60 * 1000);
-                    const isTimeExpired = Date.now() > expirationThresholdTime;
-
-                    const isNotTheLatestActiveRow = index !== 0 || !subscription?.is_active;
-                    const isRowTrulyExpired = isTimeExpired || isNotTheLatestActiveRow;
+                  {paymentHistory.map((pay) => {
+                    const isRowTrulyExpired = checkIsExpired(pay.created_at);
+                    const isRunningActive = pay.status === 'SUCCESS' && !isRowTrulyExpired && !pay.is_cancelled;
                     
                     return (
                       <div 
@@ -249,7 +274,7 @@ export default function SubscriptionManagement() {
                             <div className={`w-2 h-2 rounded-full shadow-sm ${
                               pay.status !== 'SUCCESS' 
                                 ? 'bg-rose-500' 
-                                : isRowTrulyExpired 
+                                : isRowTrulyExpired || pay.is_cancelled
                                 ? 'bg-slate-300 dark:bg-slate-600' 
                                 : 'bg-emerald-500 animate-pulse'
                             }`} />
@@ -283,6 +308,10 @@ export default function SubscriptionManagement() {
                                 Try Again
                               </button>
                             </div>
+                          ) : pay.is_cancelled ? (
+                            <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900/40">
+                              Canceled
+                            </span>
                           ) : isRowTrulyExpired ? (
                             <div className="flex items-center gap-2.5 w-full sm:w-auto">
                               <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-400 border border-slate-200/60 dark:bg-slate-700/50 dark:text-slate-400 dark:border-transparent">
@@ -297,9 +326,18 @@ export default function SubscriptionManagement() {
                               </button>
                             </div>
                           ) : (
-                            <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-transparent animate-pulse">
-                              Running Active
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-transparent animate-pulse">
+                                Running Active
+                              </span>
+                              <button
+                                disabled={actionLoading}
+                                onClick={() => setTargetCancelItem(pay)}
+                                className="px-3 py-1 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition"
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           )}
                         </div>
 
@@ -314,22 +352,22 @@ export default function SubscriptionManagement() {
         )}
       </main>
 
-      {/* PREMIUM MODAL OVERLAY COMPONENT DIALOG PANEL */}
-      {isCancelModalOpen && (
+      {/* CANCELLATION MODAL */}
+      {targetCancelItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white border border-slate-100 dark:bg-slate-800 dark:border-slate-700 p-6 max-w-sm w-full shadow-2xl space-y-4 rounded-2xl transition-colors">
             <div className="flex items-center space-x-3 text-rose-500">
               <span className="text-2xl">⚠️</span>
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white uppercase tracking-tight">Cancel Subscription?</h3>
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white uppercase tracking-tight">Cancel Specific Plan?</h3>
             </div>
             
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
-              Are you sure you want to turn off your {formatPlanDisplay(subscription?.plan_type)} subscription?
+              Are you sure you want to cancel the renewal for <strong className="text-slate-900 dark:text-slate-100">{formatPlanDisplay(targetCancelItem?.plan_type)}</strong> (Order #{targetCancelItem?.razorpay_order_id ? targetCancelItem.razorpay_order_id.substring(6, 16) : targetCancelItem?.id})?
             </p>
 
             <div className="flex space-x-3 pt-2 text-xs font-bold">
               <button
-                onClick={() => setIsCancelModalOpen(false)}
+                onClick={() => setTargetCancelItem(null)}
                 className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl transition cursor-pointer outline-none border-0"
               >
                 Keep Plan
