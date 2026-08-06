@@ -36,6 +36,21 @@ export default function PaymentDetails() {
     }
   };
 
+  // 1. 🚀 FIX: Handle loading state FIRST so null payment doesn't trigger the error UI
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col transition-colors duration-200">
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="flex flex-col items-center space-y-3">
+            <div className="w-8 h-8 border-4 border-violet-600 border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Loading payment details...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. 🚀 Handle real error or missing record state ONLY after loading completes
   if (error || !payment) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col transition-colors duration-200">
@@ -44,7 +59,7 @@ export default function PaymentDetails() {
           <div className="bg-red-50 border border-red-200 dark:bg-red-950/20 dark:border-red-900/40 text-red-700 dark:text-red-400 p-6 rounded-2xl text-center shadow-sm transition-colors">
             <p className="font-bold text-base mb-2">Lookup Error</p>
             <p className="text-sm text-red-600/90 dark:text-red-400 mb-4">{error || "Record missing."}</p>
-            <button onClick={() => navigate('/payments')} className="inline-flex px-4 py-2 bg-white dark:bg-slate-800 border border-red-200 dark:border-slate-700 rounded-xl text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-100/50 dark:hover:bg-slate-700/50 transition cursor-pointer outline-none">
+            <button onClick={() => navigate('/payment-history')} className="inline-flex px-4 py-2 bg-white dark:bg-slate-800 border border-red-200 dark:border-slate-700 rounded-xl text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-100/50 dark:hover:bg-slate-700/50 transition cursor-pointer outline-none">
               Return to History Ledger
             </button>
           </div>
@@ -56,8 +71,8 @@ export default function PaymentDetails() {
   const isSuccess = payment.status === 'SUCCESS';
 
   return (
-    /* 🚀 FIXED: Wrapped layout context tracking Tailwind v4 dark modifiers updates */
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans antialiased transition-colors duration-200">
+      <Navbar />
       <div className="py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl mx-auto">
           
@@ -72,7 +87,6 @@ export default function PaymentDetails() {
           </div>
 
           {/* Main Statement Wrapper Block */}
-          {/* 🚀 FIXED: Ledger sheets transition beautifully across adaptive slate structures */}
           <div className="bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 shadow-sm rounded-2xl overflow-hidden transition-colors duration-200">
             
             {/* Context Header Strip banner */}
@@ -94,7 +108,7 @@ export default function PaymentDetails() {
                   </span>
                 )}
               </div>
-              <h2 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight">₹{payment.amount.toFixed(2)}</h2>
+              <h2 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight">₹{payment.amount?.toFixed(2)}</h2>
               <p className="text-xs text-gray-400 dark:text-slate-400 mt-1 font-semibold tracking-wide uppercase">
                 {formatPlanType(payment.plan_type)}
               </p>
