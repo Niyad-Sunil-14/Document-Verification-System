@@ -36,17 +36,6 @@ export default function PaymentDetails() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col transition-colors duration-200">
-        <Navbar />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-violet-600 dark:border-violet-400 border-t-transparent" />
-        </div>
-      </div>
-    );
-  }
-
   if (error || !payment) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col transition-colors duration-200">
