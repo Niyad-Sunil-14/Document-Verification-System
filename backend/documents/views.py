@@ -390,71 +390,29 @@ class DocumentDetailView(APIView):
             doc_id = kwargs.get('id') or kwargs.get('pk')
             document = Document.objects.get(id=doc_id)
             
-            # 🛡️ 1. Security check for standard users
+            # 🛡️ 1. Security checks
             if not request.user.is_staff and not request.user.is_superuser:
                 if document.user != request.user:
                     return Response({"detail": "Permission Denied."}, status=status.HTTP_403_FORBIDDEN)
                 if document.status != "REJECTED":
                     return Response({"detail": "Only rejected documents can be replaced."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # 🔥 2. HANDLE FILE RE-UPLOAD REPLACEMENT WORKFLOW
+            # 🔥 2. FAST FILE INGESTION (Re-upload)
             if 'file' in request.FILES:
                 uploaded_file = request.FILES['file']
                 original_filename = uploaded_file.name
                 is_pdf_file = original_filename.lower().endswith('.pdf')
-                
-                text = ""
-                ocr_accuracy_score = 0.0
-                ocr_pipeline_status = "PENDING"
-                
-                # Run OCR pipeline logic...
-                temp_filename = None
-                try:
-                    suffix = os.path.splitext(original_filename)[1]
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
-                        for chunk in uploaded_file.chunks():
-                            temp_file.write(chunk)
-                        temp_filename = temp_file.name
 
-                    processed_image = None
-                    if is_pdf_file:
-                        pages = convert_from_path(temp_filename, first_page=1, last_page=1)
-                        if pages:
-                            opencv_img = pil_to_opencv(pages[0])
-                            with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as img_temp:
-                                cv2.imwrite(img_temp.name, opencv_img)
-                                processed_image = preprocess_image_for_ocr(img_temp.name)
-                                try: os.remove(img_temp.name)
-                                except: pass
-                    else:
-                        processed_image = preprocess_image_for_ocr(temp_filename)
+                # Save temporary file on server disk for background OCR processing
+                suffix = os.path.splitext(original_filename)[1]
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+                    for chunk in uploaded_file.chunks():
+                        temp_file.write(chunk)
+                    temp_filename = temp_file.name
 
-                    if processed_image is not None:
-                        # 🚀 FIX: Standardize re-uploads using `--psm 3` instead of the limiting `--psm 6`
-                        # This allows multi-column invoices and statements to read line-by-line correctly
-                        tesseract_custom_config = r'--oem 3 --psm 3 -c preserve_interword_spaces=1'
-                        
-                        text = pytesseract.image_to_string(processed_image, config=tesseract_custom_config)
-                        ocr_data = pytesseract.image_to_data(processed_image, output_type=Output.DICT, config=tesseract_custom_config)
-                        
-                        valid_confidences = [int(c) for c in ocr_data['conf'] if int(c) > -1]
-                        if valid_confidences:
-                            ocr_accuracy_score = round(sum(valid_confidences) / len(valid_confidences), 2)
-                            ocr_pipeline_status = "PROCESSED"
-                        else:
-                            ocr_pipeline_status = "FAILED"
-                    else:
-                        ocr_pipeline_status = "FAILED"
-                except Exception as ocr_err:
-                    logger.error(f"Re-upload OCR Failed: {ocr_err}")
-                    ocr_pipeline_status = "FAILED"
-                finally:
-                    if temp_filename and os.path.exists(temp_filename):
-                        try: os.remove(temp_filename)
-                        except: pass
-
-                # Upload payload directly to Cloudinary
                 uploaded_file.seek(0)
+
+                # Direct Cloudinary upload
                 cloudinary.config(
                     cloud_name=env('CLOUDINARY_CLOUD_NAME'),
                     api_key=env('CLOUDINARY_API_KEY'),
@@ -467,17 +425,16 @@ class DocumentDetailView(APIView):
                 )
                 secure_url = upload_result.get("secure_url")
 
-                # Save changes over the original database instance
+                # Fast update: reset flags & update URL immediately
                 with transaction.atomic():
                     document.file = secure_url
                     document.filename = original_filename
                     document.status = "PENDING"
-                    document.ocr_status = ocr_pipeline_status
-                    document.ocr_accuracy = ocr_accuracy_score
-                    document.extracted_text = text.strip() if text else ""
+                    document.ocr_status = "PROCESSING"  # 👈 Show processing state
                     document.remarks = ""
                     document.save()
-                
+
+                # Save notification
                 Notification.objects.create(
                     user=document.user,
                     title="🔄 Document Re-uploaded",
@@ -485,7 +442,13 @@ class DocumentDetailView(APIView):
                     document=document
                 )
 
-                # 🔥 CRITICAL FIX: Explicitly return here to terminate file updates with a valid Response!
+                # 🚀 REUSE EXISTING BACKGROUND THREAD FOR OCR
+                threading.Thread(
+                    target=process_ocr_in_background,
+                    args=(document.id, temp_filename, is_pdf_file)
+                ).start()
+
+                # ⚡ FAST RESPONSE BACK TO REACT (< 1 second response)
                 serializer = DocumentDetailSerializer(document, context={'request': request})
                 return Response(serializer.data, status=status.HTTP_200_OK)
 
