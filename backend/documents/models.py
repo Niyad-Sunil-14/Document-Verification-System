@@ -1,19 +1,6 @@
-from django.db import models
 import os
+from django.db import models
 from users.models import CustomUser
-# Create your models here.
-
-
-def user_directory_path(instance, filename):
-    if instance.user and instance.user.id:
-        return f'user_{instance.user.id}/documents/{filename}'
-    
-    if hasattr(instance, '_uploaded_by'):
-        return f'user_{instance._uploaded_by.id}/documents/{filename}'
-
-    return f'anonymous/documents/{filename}'
-
-
 
 
 class Document(models.Model):
@@ -25,6 +12,8 @@ class Document(models.Model):
     ]
 
     OCR_STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('PROCESSING', 'Processing'),
         ('PROCESSED', 'OCR Processed'),
         ('FAILED', 'OCR Failed'),
     ]
@@ -67,6 +56,11 @@ class Document(models.Model):
         help_text="The raw text extracted via your Python OCR parser."
     )
 
+    estimated_seconds = models.IntegerField(
+        default=5, 
+        help_text="Estimated seconds remaining for background OCR processing."
+    )
+
     remarks = models.TextField(blank=True, default="")
 
     ocr_accuracy = models.FloatField(
@@ -78,6 +72,11 @@ class Document(models.Model):
     razorpay_payment_id = models.CharField(max_length=100, null=True, blank=True)
     payment_verified = models.BooleanField(default=False)
 
+    auto_verified = models.BooleanField(
+        default=False,
+        help_text="True if the current status was set by the automatic verification engine, False if set/overridden by an admin."
+    )
+
     class Meta:
         ordering = ['-uploaded_at']
         verbose_name = "Document Upload"
@@ -86,7 +85,6 @@ class Document(models.Model):
     def __str__(self):
         return f"{self.document_type} - {self.user.email} ({self.status} | OCR: {self.ocr_status})"
 
-
     @property
     def computed_filename(self):
         if self.filename:
@@ -94,9 +92,6 @@ class Document(models.Model):
         if self.file:
             return os.path.basename(self.file)
         return "Unknown_Asset.file"
-    
-
-
 
 
 class Notification(models.Model):
@@ -118,7 +113,6 @@ class Notification(models.Model):
         ordering = ['-created_at']
 
 
-
 class Payment(models.Model):
     PLAN_CHOICES = [
         ('PAY_AS_YOU_VERIFY', 'Pay-As-You-Verify (₹49)'),
@@ -138,19 +132,16 @@ class Payment(models.Model):
         related_name='payments'
     )
     
-    # Financial Structure details
     plan_type = models.CharField(max_length=50, choices=PLAN_CHOICES)
     amount = models.DecimalField(max_digits=10, decimal_places=2) 
     currency = models.CharField(max_length=10, default='INR')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     is_cancelled = models.BooleanField(default=False)
     
-    # Razorpay Transaction Identifiers
     razorpay_order_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     razorpay_payment_id = models.CharField(max_length=255, blank=True, null=True)
     razorpay_signature = models.CharField(max_length=555, blank=True, null=True)
     
-    # 🔗 One-to-One connection mapping back to your uploaded document model
     document = models.OneToOneField(
         Document, 
         on_delete=models.SET_NULL, 

@@ -25,3 +25,5 @@ COPY . .
 # Run database migrations and collect static files automatically on container startup
 # Then hand off request traffic handling to Gunicorn
 CMD python manage.py migrate && python manage.py collectstatic --noinput && gunicorn DVS.wsgi:application --bind 0.0.0.0:$PORT
+
+

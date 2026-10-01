@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Document,Notification
+from .models import Document, Notification
+
 
 class DocumentUploadSerializer(serializers.ModelSerializer):
     file = serializers.FileField(write_only=True)
@@ -10,7 +11,10 @@ class DocumentUploadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Document
-        fields = ['id', 'username', 'document_type', 'file', 'status', 'ocr_status', 'uploaded_at','razorpay_order_id','razorpay_payment_id','razorpay_signature']
+        fields = [
+            'id', 'username', 'document_type', 'file', 'status', 'ocr_status', 
+            'uploaded_at', 'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature'
+        ]
 
 
 class DocumentListSerializer(serializers.ModelSerializer):
@@ -38,7 +42,7 @@ class DocumentListSerializer(serializers.ModelSerializer):
         ]
 
     def get_uploaded_at(self, obj):
-        date_field = getattr(obj, 'date_joined', getattr(obj, 'uploaded_at', getattr(obj, 'created_at', None)))
+        date_field = getattr(obj, 'uploaded_at', getattr(obj, 'created_at', None))
         if date_field:
             return date_field.strftime("%B %d, %Y")
         return "Recent"
@@ -51,10 +55,15 @@ class DocumentDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Document
-        fields = ['id', 'username', 'file', 'filename', 'document_type', 'status','ocr_status', 'extracted_text','ocr_accuracy', 'remarks','uploaded_at']
+        fields = [
+            'id', 'username', 'file', 'filename', 'document_type', 'status',
+            'ocr_status', 'extracted_text', 'ocr_accuracy', 'remarks',
+            'uploaded_at', 'auto_verified'
+        ]
+        read_only_fields = ['auto_verified']
 
     def get_uploaded_at(self, obj):
-        date_field = getattr(obj, 'date_joined', getattr(obj, 'uploaded_at', getattr(obj, 'created_at', None)))
+        date_field = getattr(obj, 'uploaded_at', getattr(obj, 'created_at', None))
         if date_field:
             return date_field.strftime("%B %d, %Y at %I:%M %p")
         return "Recent"
@@ -66,8 +75,6 @@ class DocumentDetailSerializer(serializers.ModelSerializer):
         if request and request.user and not request.user.is_staff:
             data.pop('extracted_text', None)
         return data
-    
-
 
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -76,7 +83,7 @@ class NotificationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Notification
-        fields = ['id', 'title', 'description','document_id','is_read', 'created_at', 'created_at_human']
+        fields = ['id', 'title', 'description', 'document_id', 'is_read', 'created_at', 'created_at_human']
 
     def get_created_at_human(self, obj):
         return obj.created_at.strftime("%b %d, %Y at %I:%M %p")

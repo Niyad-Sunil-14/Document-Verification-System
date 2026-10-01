@@ -1,133 +1,251 @@
-import logging
-import tempfile  
-import cloudinary 
-import environ    
+import os
 import json
+import logging
+import tempfile
+import threading
+from datetime import timedelta
 
-from django.db import transaction
-from rest_framework import status
-from rest_framework.parsers import FormParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from rest_framework.views import APIView
-import cloudinary.uploader
-import pytesseract
-from pytesseract import Output
-from pdf2image import convert_from_path 
 import cv2
 import numpy as np
-from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny
-from django.conf import settings
+import pytesseract
+from PIL import Image
+from pdf2image import convert_from_path
 import razorpay
+import cloudinary
+import cloudinary.uploader
+import environ
+
+from django.conf import settings
+from django.db import transaction, connection, close_old_connections
+from django.db.models import Count, Q
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from django.utils import timezone
-from datetime import timedelta
+
+from rest_framework import status
+from rest_framework.views import APIView
 from rest_framework.generics import RetrieveAPIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.pagination import PageNumberPagination
 
-
-import os
-from .models import Document,Notification,Payment
+from .models import Document, Notification, Payment, CustomUser
 from .serializers import (
     DocumentDetailSerializer,
     DocumentListSerializer,
     DocumentUploadSerializer,
     NotificationSerializer
 )
-from .utils import extract_text_from_pdf, preprocess_image_for_ocr
+from .utils import (
+    extract_text_from_pdf, 
+    extract_ocr_text, 
+    evaluate_document_verification, 
+    estimate_processing_time
+)
 
 logger = logging.getLogger(__name__)
-
-def pil_to_opencv(pil_image):
-    return cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
-
 env = environ.Env()
 
-import os
-import tempfile
-import cv2
-import pytesseract
-from pytesseract import Output
-from pdf2image import convert_from_path
-import cloudinary
-import cloudinary.uploader
-import razorpay
-from django.conf import settings
-from django.db import transaction
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.parsers import MultiPartParser, FormParser
-from .models import Document, Payment, Notification  # 🚀 Added Notification import
-import threading  
+# Initialize Razorpay Client cleanly before view usages
+razorpay_client = razorpay.Client(
+    auth=(
+        getattr(settings, 'RAZORPAY_KEY_ID', ''), 
+        getattr(settings, 'RAZORPAY_KEY_SECRET', '')
+    )
+)
 
-# Keep your logger and pre-processing utility imports/functions here...
 
-def process_ocr_in_background(document_id, temp_filename, is_pdf_file):
+def process_ocr_in_background(document_id, temp_file_path, is_pdf):
     """
-    Runs Tesseract OCR in a separate thread so the user gets an instant HTTP 201 response.
+    Background Thread Worker:
+    - Closes old/stale connections to prevent DB operational timeouts inside thread execution.
+    - Performs OCR text extraction (handling both digital and scanned PDF conversions).
+    - Evaluates verification rules, updates Document record, and notifies the user.
     """
+    close_old_connections()
     try:
-        processed_image = None
-        text = ""
-        ocr_accuracy_score = 0.0
+        doc = Document.objects.get(id=document_id)
+        extracted_text = ""
+        accuracy_score = 0.0
+        ocr_pipeline_status = "FAILED"
 
-        if is_pdf_file:
-            pages = convert_from_path(temp_filename, first_page=1, last_page=1)
-            if pages:
-                opencv_img = pil_to_opencv(pages[0])
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as img_temp:
-                    cv2.imwrite(img_temp.name, opencv_img)
-                    processed_image = preprocess_image_for_ocr(img_temp.name)
-                    try:
-                        os.remove(img_temp.name)
-                    except Exception:
-                        pass
-        else:
-            processed_image = preprocess_image_for_ocr(temp_filename)
-
-        if processed_image is not None:
-            tesseract_custom_config = r'--oem 3 --psm 3 -c preserve_interword_spaces=1'
-            text = pytesseract.image_to_string(processed_image, config=tesseract_custom_config)
-            ocr_data = pytesseract.image_to_data(processed_image, output_type=Output.DICT, config=tesseract_custom_config)
-
-            valid_confidences = [int(c) for c in ocr_data['conf'] if int(c) > -1]
-            if valid_confidences:
-                ocr_accuracy_score = round(sum(valid_confidences) / len(valid_confidences), 2)
-                pipeline_status = "PROCESSED"
+        # -------------------------------------------------------------
+        # TEXT EXTRACTION PHASE
+        # -------------------------------------------------------------
+        if is_pdf:
+            extracted_text = extract_text_from_pdf(temp_file_path)
+            if extracted_text.strip():
+                ocr_pipeline_status = "PROCESSED"
+                accuracy_score = 95.0
             else:
-                pipeline_status = "FAILED"
+                # Scanned PDF fallback using pdf2image -> pytesseract
+                try:
+                    images = convert_from_path(temp_file_path)
+                    combined_text = ""
+                    confidences = []
+                    
+                    for img in images:
+                        data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+                        combined_text += pytesseract.image_to_string(img) + "\n"
+                        confidences.extend([int(c) for c in data['conf'] if int(c) > 0])
+                        
+                    extracted_text = combined_text.strip()
+                    accuracy_score = float(np.mean(confidences)) if confidences else 50.0
+                    ocr_pipeline_status = "PROCESSED" if extracted_text else "FAILED"
+                except Exception as pdf_ocr_err:
+                    logger.error(f"Scanned PDF OCR failed: {pdf_ocr_err}")
         else:
-            pipeline_status = "FAILED"
+            # Use extract_ocr_text directly for image uploads
+            ocr_result = extract_ocr_text(
+                image_input=temp_file_path,
+                psm=11,
+                whitelist='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/:.- '
+            )
+            extracted_text = ocr_result["extracted_text"]
+            accuracy_score = ocr_result["confidence"]
+            ocr_pipeline_status = "PROCESSED" if extracted_text else "FAILED"
 
-        # Update the Document instance once background OCR is complete
-        Document.objects.filter(id=document_id).update(
-            ocr_status=pipeline_status,
-            ocr_accuracy=ocr_accuracy_score,
-            extracted_text=text.strip() if text else ""
+        # -------------------------------------------------------------
+        # VERIFICATION EVALUATION ENGINE
+        # -------------------------------------------------------------
+        final_status, remarks, is_auto_verified = evaluate_document_verification(
+            extracted_text=extracted_text,
+            document_type=doc.document_type,
+            ocr_accuracy=accuracy_score,
+            pipeline_status=ocr_pipeline_status
         )
-        logger.info(f"✅ Background OCR completed for Document ID: {document_id}")
 
-    except Exception as err:
-        logger.error(f"🚨 Background OCR failed for Document ID {document_id}: {err}")
-        Document.objects.filter(id=document_id).update(ocr_status="FAILED")
+        # -------------------------------------------------------------
+        # DATABASE UPDATE & NOTIFICATION
+        # -------------------------------------------------------------
+        doc.extracted_text = extracted_text
+        doc.ocr_accuracy = round(accuracy_score, 2)
+        doc.ocr_status = "PROCESSED" if ocr_pipeline_status == "PROCESSED" else "FAILED"
+        doc.status = final_status
+        doc.remarks = remarks
+        doc.auto_verified = is_auto_verified
+        doc.save()
+
+        Notification.objects.create(
+            user=doc.user,
+            title=f"Document Verification {final_status}",
+            description=f"Verification for '{doc.filename}' complete. Status: {final_status}.",
+            document=doc,
+            is_read=False
+        )
+
+    except Exception as e:
+        logger.error(f"Error in OCR background processing thread: {str(e)}")
+        try:
+            doc = Document.objects.get(id=document_id)
+            doc.ocr_status = "FAILED"
+            doc.remarks = f"Processing system error: {str(e)}"
+            doc.save()
+        except Exception:
+            pass
 
     finally:
-        if temp_filename and os.path.exists(temp_filename):
-            try:
-                os.remove(temp_filename)
-            except Exception:
-                pass
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+        close_old_connections()
 
+
+class DocumentUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request, *args, **kwargs):
+        user = request.user
+        use_credit = request.data.get('use_credit') == 'true'
+        
+        serializer = DocumentUploadSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        rzp_order_id = serializer.validated_data.get('razorpay_order_id')
+        rzp_payment_id = serializer.validated_data.get('razorpay_payment_id')
+
+        # Credit Validation Layer
+        if use_credit:
+            with transaction.atomic():
+                current_user = CustomUser.objects.select_for_update().get(id=user.id)
+                credits_available = getattr(current_user, 'document_credits', 0)
+                if credits_available <= 0:
+                    return Response(
+                        {"detail": "Insufficient credits available."},
+                        status=status.HTTP_402_PAYMENT_REQUIRED
+                    )
+                current_user.document_credits -= 1
+                current_user.save()
+
+        uploaded_file = request.FILES['file']
+        document_type = serializer.validated_data.get('document_type', '')
+        original_filename = uploaded_file.name
+        file_size_bytes = uploaded_file.size
+        is_pdf_file = original_filename.lower().endswith('.pdf')
+
+        time_estimation = estimate_processing_time(is_pdf_file, file_size_bytes)
+
+        suffix = os.path.splitext(original_filename)[1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+            for chunk in uploaded_file.chunks():
+                temp_file.write(chunk)
+            temp_filename = temp_file.name
+
+        uploaded_file.seek(0)
+
+        try:
+            upload_result = cloudinary.uploader.upload(
+                uploaded_file,
+                folder="user_documents/",
+                resource_type="raw" if is_pdf_file else "image"
+            )
+            secure_url = upload_result.get("secure_url")
+
+            document = Document.objects.create(
+                user=request.user,
+                document_type=document_type,
+                file=secure_url,
+                filename=original_filename, 
+                status="PENDING",
+                ocr_status="PROCESSING",
+                ocr_accuracy=0.0,
+                estimated_seconds=time_estimation["estimated_seconds"],
+                razorpay_order_id=rzp_order_id or "",
+                razorpay_payment_id=rzp_payment_id or "",
+                payment_verified=True
+            )
+
+            threading.Thread(
+                target=process_ocr_in_background,
+                args=(document.id, temp_filename, is_pdf_file)
+            ).start()
+
+            return Response(
+                {
+                    "id": document.id, 
+                    "document_type": document.document_type,
+                    "file": document.file, 
+                    "filename": original_filename,
+                    "status": document.status,
+                    "ocr_status": document.ocr_status,
+                    "estimated_seconds": document.estimated_seconds,
+                    "estimated_time_formatted": time_estimation["estimated_time_formatted"]
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        except Exception as err:
+            if os.path.exists(temp_filename):
+                os.remove(temp_filename)
+            return Response({"error": str(err)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class DocumentSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Perform 1 optimized SQL aggregate query for all statuses
         stats = Document.objects.filter(user=request.user).aggregate(
             total=Count('id'),
             pending=Count('id', filter=Q(status='PENDING')),
@@ -142,168 +260,18 @@ class DocumentSummaryView(APIView):
             "rejected": stats['rejected'] or 0,
         })
 
-class DocumentUploadView(APIView):
-    permission_classes = [IsAuthenticated]
-    parser_classes = (MultiPartParser, FormParser)
-
-    def post(self, request, *args, **kwargs):
-        user = request.user
-        use_credit = request.data.get('use_credit') == 'true'
-        
-        serializer = DocumentUploadSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        # -----------------------------------------------------------------
-        # STEP A: BILLING SECURITY & CREDIT BALANCE GUARD LAYER
-        # -----------------------------------------------------------------
-        rzp_order_id = serializer.validated_data.get('razorpay_order_id')
-        rzp_payment_id = serializer.validated_data.get('razorpay_payment_id')
-        rzp_signature = serializer.validated_data.get('razorpay_signature')
-
-        if use_credit:
-            with transaction.atomic():
-                current_user = request.user.__class__.objects.select_for_update().get(id=user.id)
-                if current_user.document_credits <= 0:
-                    return Response(
-                        {"detail": "Out of account credits. Please purchase a plan or use Pay-As-You-Verify."},
-                        status=status.HTTP_402_PAYMENT_REQUIRED
-                    )
-                current_user.document_credits -= 1
-                current_user.save()
-        else:
-            if not user.is_subscribed and user.document_credits <= 0:
-                if not all([rzp_order_id, rzp_payment_id, rzp_signature]):
-                    return Response(
-                        {"detail": "Out of verification credits. Please upgrade your plan or pay per single verification loop."},
-                        status=status.HTTP_402_PAYMENT_REQUIRED
-                    )
-            
-            if all([rzp_order_id, rzp_payment_id, rzp_signature]):
-                try:
-                    client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-                    verification_payload = {
-                        'razorpay_order_id': rzp_order_id,
-                        'razorpay_payment_id': rzp_payment_id,
-                        'razorpay_signature': rzp_signature
-                    }
-                    client.utility.verify_payment_signature(verification_payload)
-                except Exception as pay_err:
-                    return Response(
-                        {"detail": "Payment security validation signature mismatch. Processing terminated."}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-        # -----------------------------------------------------------------
-        # STEP B: CLOUDINARY FILE UPLOAD & TEMP SAVE
-        # -----------------------------------------------------------------
-        uploaded_file = request.FILES['file']
-        document_type = serializer.validated_data.get('document_type', '')
-        original_filename = uploaded_file.name
-        is_pdf_file = original_filename.lower().endswith('.pdf')
-
-        # Save temporary file for background OCR process
-        suffix = os.path.splitext(original_filename)[1]
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
-            for chunk in uploaded_file.chunks():
-                temp_file.write(chunk)
-            temp_filename = temp_file.name
-
-        uploaded_file.seek(0)
-
-        try:
-            cloudinary.config(
-                cloud_name=env('CLOUDINARY_CLOUD_NAME'),
-                api_key=env('CLOUDINARY_API_KEY'),
-                api_secret=env('CLOUDINARY_API_SECRET'),
-                secure=True
-            )
-            
-            determined_resource_type = "raw" if is_pdf_file else "image"
-            
-            upload_result = cloudinary.uploader.upload(
-                uploaded_file,
-                folder="user_documents/",
-                resource_type=determined_resource_type
-            )
-            secure_url = upload_result.get("secure_url")
-
-            # Create document with status "PENDING" and ocr_status "PROCESSING"
-            with transaction.atomic():
-                document = Document.objects.create(
-                    user=request.user,
-                    document_type=document_type,
-                    file=secure_url,
-                    filename=original_filename, 
-                    status="PENDING",
-                    ocr_status="PROCESSING",  # 👈 Initial state
-                    ocr_accuracy=0.0,
-                    extracted_text="",
-                    razorpay_order_id=rzp_order_id if rzp_order_id else "",
-                    razorpay_payment_id=rzp_payment_id if rzp_payment_id else "",
-                    payment_verified=True
-                )
-
-                if not use_credit:
-                    Payment.objects.create(
-                        user=request.user,
-                        plan_type='PAY_AS_YOU_VERIFY',
-                        amount=49.00,
-                        status='SUCCESS',
-                        razorpay_order_id=rzp_order_id,
-                        razorpay_payment_id=rzp_payment_id,
-                        razorpay_signature=rzp_signature,
-                        document=document
-                    )
-                    
-                    Notification.objects.create(
-                        user=request.user,
-                        title="✅ Payment Success",
-                        description=f"Payment received for verifying '{original_filename}'. The document analysis has been started.",
-                        document=document,
-                        is_read=False
-                    )
-
-            # 🚀 STEP C: LAUNCH HEAVY OCR IN A SEPARATE THREAD
-            threading.Thread(
-                target=process_ocr_in_background,
-                args=(document.id, temp_filename, is_pdf_file)
-            ).start()
-
-            # ⚡ IMMEDIATELY RETURN RESPONSE (Does not wait for OCR to finish!)
-            return Response(
-                {
-                    "id": document.id, 
-                    "document_type": document.document_type,
-                    "file": document.file, 
-                    "filename": original_filename,
-                    "status": document.status,
-                    "ocr_status": "PROCESSING",
-                    "payment_verified": True
-                },
-                status=status.HTTP_201_CREATED
-            )
-
-        except Exception as upload_error:
-            logger.error(f"Upload failed: {upload_error}")
-            return Response(
-                {"error": f"Upload failed: {str(upload_error)}"}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-
 
 class DocumentStandardPagination(PageNumberPagination):
     page_size = 10                  
     page_size_query_param = 'size'  
     max_page_size = 100
 
+
 class DocumentListView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = DocumentListSerializer
 
     def get(self, request, *args, **kwargs):
-        # 1. Base Queryset Filter by Role Access
         if request.user.is_staff:
             queryset = Document.objects.all()
             ITEMS_PER_PAGE = 10
@@ -311,10 +279,9 @@ class DocumentListView(APIView):
             queryset = Document.objects.filter(user=request.user)
             ITEMS_PER_PAGE = 12
 
-        # 2. Extract Query Parameters
         status_filter = request.query_params.get('status', 'ALL')
         search_term = request.query_params.get('search', '').strip()
-        limit_param = request.query_params.get('limit')  # 👈 Read limit parameter
+        limit_param = request.query_params.get('limit')
         
         try:
             page_num = int(request.query_params.get('page', 1))
@@ -323,7 +290,6 @@ class DocumentListView(APIView):
         except (ValueError, TypeError):
             page_num = 1
 
-        # 3. Apply Filters to the Queryset
         if status_filter != 'ALL':
             queryset = queryset.filter(Q(status=status_filter) | Q(ocr_status=status_filter))
 
@@ -335,13 +301,9 @@ class DocumentListView(APIView):
                 Q(filename__icontains=search_term)
             )
 
-        # Order by newest uploads
         queryset = queryset.order_by('-uploaded_at')
-
-        # 4. Calculate Dynamic Slicing / Limit Handling
         total_count = queryset.count()
 
-        # 🚀 Check if caller requested a explicit top N limit (e.g. Dashboard preview)
         if limit_param and limit_param.isdigit():
             limit = int(limit_param)
             paginated_queryset = queryset[:limit]
@@ -353,24 +315,19 @@ class DocumentListView(APIView):
                 "results": serializer.data
             }, status=status.HTTP_200_OK)
 
-        # Standard Paginated Slicing
         start_index = (page_num - 1) * ITEMS_PER_PAGE
         end_index = start_index + ITEMS_PER_PAGE
 
         paginated_queryset = queryset[start_index:end_index]
-
-        has_next = end_index < total_count
-        has_previous = page_num > 1
-
         serializer = self.serializer_class(paginated_queryset, many=True)
 
         return Response({
             "count": total_count,
-            "next": has_next,
-            "previous": has_previous,
+            "next": end_index < total_count,
+            "previous": page_num > 1,
             "results": serializer.data
         }, status=status.HTTP_200_OK)
-    
+
 
 class DocumentDetailView(APIView):
     permission_classes = [IsAuthenticated]
@@ -378,7 +335,6 @@ class DocumentDetailView(APIView):
     def get(self, request, *args, **kwargs):
         try:
             doc_id = kwargs.get('id') or kwargs.get('pk')
-            
             document = Document.objects.get(id=doc_id)
             serializer = DocumentDetailSerializer(document, context={'request': request})
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -390,20 +346,18 @@ class DocumentDetailView(APIView):
             doc_id = kwargs.get('id') or kwargs.get('pk')
             document = Document.objects.get(id=doc_id)
             
-            # 🛡️ 1. Security checks
             if not request.user.is_staff and not request.user.is_superuser:
                 if document.user != request.user:
                     return Response({"detail": "Permission Denied."}, status=status.HTTP_403_FORBIDDEN)
                 if document.status != "REJECTED":
                     return Response({"detail": "Only rejected documents can be replaced."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # 🔥 2. FAST FILE INGESTION (Re-upload)
+            # Re-upload handling
             if 'file' in request.FILES:
                 uploaded_file = request.FILES['file']
                 original_filename = uploaded_file.name
                 is_pdf_file = original_filename.lower().endswith('.pdf')
 
-                # Save temporary file on server disk for background OCR processing
                 suffix = os.path.splitext(original_filename)[1]
                 with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
                     for chunk in uploaded_file.chunks():
@@ -412,29 +366,20 @@ class DocumentDetailView(APIView):
 
                 uploaded_file.seek(0)
 
-                # Direct Cloudinary upload
-                cloudinary.config(
-                    cloud_name=env('CLOUDINARY_CLOUD_NAME'),
-                    api_key=env('CLOUDINARY_API_KEY'),
-                    api_secret=env('CLOUDINARY_API_SECRET'),
-                    secure=True
-                )
-                determined_resource_type = "raw" if is_pdf_file else "image"
                 upload_result = cloudinary.uploader.upload(
-                    uploaded_file, folder="user_documents/", resource_type=determined_resource_type
+                    uploaded_file, folder="user_documents/", resource_type="raw" if is_pdf_file else "image"
                 )
                 secure_url = upload_result.get("secure_url")
 
-                # Fast update: reset flags & update URL immediately
                 with transaction.atomic():
                     document.file = secure_url
                     document.filename = original_filename
                     document.status = "PENDING"
-                    document.ocr_status = "PROCESSING"  # 👈 Show processing state
+                    document.ocr_status = "PROCESSING"
                     document.remarks = ""
+                    document.auto_verified = False
                     document.save()
 
-                # Save notification
                 Notification.objects.create(
                     user=document.user,
                     title="🔄 Document Re-uploaded",
@@ -442,34 +387,28 @@ class DocumentDetailView(APIView):
                     document=document
                 )
 
-                # 🚀 REUSE EXISTING BACKGROUND THREAD FOR OCR
                 threading.Thread(
                     target=process_ocr_in_background,
                     args=(document.id, temp_filename, is_pdf_file)
                 ).start()
 
-                # ⚡ FAST RESPONSE BACK TO REACT (< 1 second response)
                 serializer = DocumentDetailSerializer(document, context={'request': request})
                 return Response(serializer.data, status=status.HTTP_200_OK)
 
-            # 🛠️ 3. HANDLE METADATA UPDATE WORKFLOW (Admin approval/rejection edits)
+            # Metadata update handling (Admin review)
             serializer = DocumentDetailSerializer(document, data=request.data, partial=True, context={'request': request})
             old_status = document.status
             
             if serializer.is_valid():
-                # Save updates to the document (status, remarks, etc.)
                 updated_document = serializer.save()
+                updated_document.auto_verified = False
+                updated_document.save(update_fields=['auto_verified'])
                 
-                # Fetch clean references of the updated data
                 new_status = updated_document.status
                 admin_remarks = updated_document.remarks or ""
                 doc_type_clean = (updated_document.document_type or "Document").replace('_', ' ').title()
 
-                # 🔥 AUTOMATION LAYER: Send custom notifications based on the action taken
-                notification_title = ""
-                notification_desc = ""
                 if old_status != new_status:
-                    # Case A: Admin altered the verification status
                     if new_status == "APPROVED":
                         notification_title = f"✅ {doc_type_clean} Approved"
                         notification_desc = f"Your uploaded {doc_type_clean.lower()} has been verified secure by our compliance team."
@@ -480,17 +419,14 @@ class DocumentDetailView(APIView):
                         notification_title = f"ℹ️ {doc_type_clean} Status Updated"
                         notification_desc = f"Your document status has been updated to {new_status}."
                 else:
-                    # Case B: Admin only updated/sent audit remarks notes without changing status
                     notification_title = f"💬 Audit Notes Appended: {doc_type_clean}"
                     notification_desc = "An administrator has added review remarks to your document registration profile."
 
-                # If there are remarks, append them neatly to the notification body
                 if admin_remarks:
                     notification_desc += f" Remarks: \"{admin_remarks}\""
 
-                # Save the new notification targeting the document owner
                 Notification.objects.create(
-                    user=updated_document.user,  # 🔥 Crucial: Routes directly to the user who owns the file
+                    user=updated_document.user,
                     title=notification_title,
                     description=notification_desc,
                     is_read=False
@@ -501,27 +437,23 @@ class DocumentDetailView(APIView):
 
         except Document.DoesNotExist:
             return Response({"detail": "Document not found."}, status=status.HTTP_404_NOT_FOUND)
-    
+
 
 class NotificationListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # 1. Base queryset ordered by newest first
         notifications = Notification.objects.filter(user=request.user).order_by('-created_at')
         
-        # 2. Filter unread if requested
         if request.query_params.get('unread_only') == 'true':
             notifications = notifications.filter(is_read=False)
             
-        # 3. Slice by limit parameter if provided (e.g., ?limit=3)
         limit = request.query_params.get('limit')
         if limit:
             try:
-                limit_int = int(limit)
-                notifications = notifications[:limit_int]
+                notifications = notifications[:int(limit)]
             except ValueError:
-                pass  # Skip slicing if limit isn't a valid integer
+                pass
         
         serializer = NotificationSerializer(notifications, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -530,13 +462,6 @@ class NotificationListView(APIView):
         Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
         return Response({"detail": "All notifications marked as read."}, status=status.HTTP_200_OK)
 
-
-
-
-
-# ADMIN SIDE
-from django.db.models import Count, Q
-from .models import Document,CustomUser 
 
 class AdminDashboardMetricsView(APIView):
     permission_classes = [IsAuthenticated]
@@ -568,13 +493,7 @@ class AdminDashboardMetricsView(APIView):
             "ocrProcessed": metrics['ocr_processed'],
             "ocrFailed": metrics['ocr_failed']
         }, status=status.HTTP_200_OK)
-    
 
-
-
-
-
-#RazorPay
 
 @method_decorator(csrf_exempt, name='dispatch')
 class RazorpayWebhookView(APIView):
@@ -582,68 +501,52 @@ class RazorpayWebhookView(APIView):
     authentication_classes = []
 
     def post(self, request, *args, **kwargs):
-        # 1. Capture the absolute RAW body bytes and signature header
         webhook_body = request.body
         received_signature = request.headers.get('X-Razorpay-Signature', '')
         webhook_secret = getattr(settings, 'RAZORPAY_WEBHOOK_SECRET', '')
 
-        # 2. Use the official SDK Webhook verification helper method
-        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-        
         try:
-            client.utility.verify_webhook_signature(
+            razorpay_client.utility.verify_webhook_signature(
                 webhook_body.decode('utf-8'), 
                 received_signature, 
                 webhook_secret
             )
-            logger.info("🛡️ Webhook cryptographic signature matches perfectly!")
-            
         except Exception as sig_err:
-            logger.error(f"🚨 Razorpay webhook signature mismatch: {sig_err}")
+            logger.error(f"Razorpay webhook signature mismatch: {sig_err}")
             return Response({"detail": "Signature integrity verification failed."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 3. If validation passes, read the event data safely
         try:
             event_data = json.loads(webhook_body.decode('utf-8'))
             event_type = event_data.get('event')
             payload = event_data.get('payload', {})
-            
-            logger.info(f"📦 Intercepted Razorpay Event: {event_type}")
 
-            # 💰 SUCCESS EVENTS
             if event_type in ["order.paid", "payment.captured"]:
                 payment_entity = payload.get('payment', {}).get('entity', {})
                 razorpay_order_id = payment_entity.get('order_id')
                 razorpay_payment_id = payment_entity.get('id')
                 razorpay_signature = payment_entity.get('signature', '')
                 
-                # Update our Payment tracker status to SUCCESS
                 Payment.objects.filter(razorpay_order_id=razorpay_order_id).update(
                     status='SUCCESS',
                     razorpay_payment_id=razorpay_payment_id,
                     razorpay_signature=razorpay_signature
                 )
-                logger.info(f"💰 Confirmed payment capture for Order: {razorpay_order_id}")
 
-            # ❌ FAILURE EVENTS (Bank declines, invalid cards, system dropping out)
             elif event_type == "payment.failed":
                 payment_entity = payload.get('payment', {}).get('entity', {})
                 razorpay_order_id = payment_entity.get('order_id')
                 razorpay_payment_id = payment_entity.get('id')
                 
-                # Flag the payment instance record as permanently FAILED in our ledger table
                 Payment.objects.filter(razorpay_order_id=razorpay_order_id).update(
                     status='FAILED',
                     razorpay_payment_id=razorpay_payment_id
                 )
-                logger.warning(f"❌ Payment decline captured via Webhook for Order: {razorpay_order_id}")
 
             return Response({"status": "acknowledged"}, status=status.HTTP_200_OK)
 
         except Exception as parse_err:
-            logger.error(f"❌ Error handling payload parameters: {parse_err}")
+            logger.error(f"Error handling webhook payload: {parse_err}")
             return Response({"detail": "Internal processing failure."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 
 class RazorpayOrderCreateView(APIView):
@@ -661,13 +564,12 @@ class RazorpayOrderCreateView(APIView):
         }
 
         try:
-            # Use the global razorpay_client initialized at the top
             razorpay_order = razorpay_client.order.create(data=order_data)
             return Response({
                 "order_id": razorpay_order["id"],
                 "amount": amount_in_paisa,
                 "currency": currency,
-                "razorpay_key_id": settings.RAZORPAY_KEY_ID,
+                "razorpay_key_id": getattr(settings, 'RAZORPAY_KEY_ID', ''),
                 "user_details": {
                     "fullname": getattr(request.user, "fullname", ""),
                     "email": request.user.email
@@ -678,23 +580,14 @@ class RazorpayOrderCreateView(APIView):
                 {"detail": f"Failed to open clearing instance with Razorpay: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        
 
-
-# Initialize Razorpay Client
-razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
 
 class SubscriptionDetailsView(APIView):
-    """
-    🚀 DYNAMIC MEMBERSHIP EVALUATOR: Determines user tier state dynamically
-    by scanning the existing Payment ledger for successful active packages.
-    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
         
-        # Pull the absolute latest successful purchase order
         latest_payment = Payment.objects.filter(
             user=user,
             status='SUCCESS',
@@ -705,31 +598,26 @@ class SubscriptionDetailsView(APIView):
         expires_at = None
         current_plan = "PAY_AS_YOU_VERIFY"
 
-        # Check if the user has an active expiration date set on their profile
-        if user.subscription_expires_at and user.subscription_expires_at > timezone.now():
+        sub_expires = getattr(user, 'subscription_expires_at', None)
+        if sub_expires and sub_expires > timezone.now():
             is_active = True
-            expires_at = user.subscription_expires_at
+            expires_at = sub_expires
             if latest_payment:
                 current_plan = latest_payment.plan_type
         else:
-            # Emergency safeguard fallback if date passed but flag wasn't cleared
-            if user.is_subscribed:
+            if getattr(user, 'is_subscribed', False):
                 user.is_subscribed = False
                 user.save()
 
         return Response({
             "plan_type": current_plan,
             "is_active": is_active,
-            "is_canceled": not is_active,  # If inactive, allows the front-end to trigger a Renew button
+            "is_canceled": not is_active,
             "expires_at": expires_at
         }, status=status.HTTP_200_OK)
 
 
 class CancelSubscriptionView(APIView):
-    """
-    Cancels auto-renewal for a specific payment purchase or marks the plan iteration as cancelled
-    without prematurely wiping existing valid credit days.
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -739,7 +627,6 @@ class CancelSubscriptionView(APIView):
 
         target_payment = None
 
-        # 1. Target specific Payment if payment_id is supplied by frontend
         if payment_id:
             target_payment = Payment.objects.filter(id=payment_id, user=user).first()
         elif plan_type:
@@ -749,7 +636,6 @@ class CancelSubscriptionView(APIView):
                 status='SUCCESS'
             ).order_by('-created_at').first()
 
-        # 2. Flag the specific payment as cancelled (Ensure `is_cancelled` boolean exists on Payment model)
         if target_payment:
             target_payment.is_cancelled = True
             target_payment.save()
@@ -757,8 +643,6 @@ class CancelSubscriptionView(APIView):
         else:
             canceled_plan_label = "Subscription Plan"
 
-        # 3. Check if user has any OTHER active, un-cancelled payments remaining
-        # If no active un-cancelled payments exist, update global user flags
         active_remaining_payments = Payment.objects.filter(
             user=user,
             status='SUCCESS',
@@ -766,11 +650,10 @@ class CancelSubscriptionView(APIView):
             created_at__gte=timezone.now() - timedelta(days=30)
         ).exists()
 
-        if not active_remaining_payments:
+        if not active_remaining_payments and hasattr(user, 'is_subscribed'):
             user.is_subscribed = False
             user.save()
 
-        # 4. Notify user
         Notification.objects.create(
             user=user,
             title="🛑 Subscription Renewal Cancelled",
@@ -780,7 +663,6 @@ class CancelSubscriptionView(APIView):
         return Response({
             "detail": f"Subscription for {canceled_plan_label} was successfully cancelled."
         }, status=status.HTTP_200_OK)
-
 
 
 class CreateSubscriptionView(APIView):
@@ -793,11 +675,10 @@ class CreateSubscriptionView(APIView):
             
             if plan_type == 'starter_pack':
                 amount_in_rupees = 99
-                amount_in_paisa = amount_in_rupees * 100  
             else:
                 amount_in_rupees = 299
-                amount_in_paisa = amount_in_rupees * 100  
-
+                
+            amount_in_paisa = amount_in_rupees * 100  
             currency = "INR"
 
             order_data = {
@@ -806,19 +687,17 @@ class CreateSubscriptionView(APIView):
                 "payment_capture": 1,
                 "notes": {
                     "user_id": str(user.id),
-                    "fullname": user.fullname,
+                    "fullname": getattr(user, 'fullname', ''),
                     "plan_type": plan_type  
                 }
             }
 
-            # Generate order context dynamically with correct price point
             razorpay_order = razorpay_client.order.create(data=order_data)
 
-            # 🚀 PRE-INJECT PENDING RECORD INTO PAYMENTS HISTORY TABLE
             Payment.objects.create(
                 user=user,
                 plan_type=plan_type.upper(),
-                amount=amount_in_rupees,  # Saves clean integer/decimal tracking
+                amount=amount_in_rupees,
                 currency=currency,
                 status='PENDING',
                 razorpay_order_id=razorpay_order['id']
@@ -828,12 +707,12 @@ class CreateSubscriptionView(APIView):
                 "order_id": razorpay_order['id'],
                 "amount": amount_in_paisa,
                 "currency": currency,
-                "key_id": settings.RAZORPAY_KEY_ID,
+                "key_id": getattr(settings, 'RAZORPAY_KEY_ID', ''),
                 "user_details": {
-                    "fullname": user.fullname,
+                    "fullname": getattr(user, 'fullname', ''),
                     "email": user.email
                 }
-              }, status=status.HTTP_201_CREATED)
+            }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             logger.error(f"Subscription creation error: {str(e)}")
@@ -861,7 +740,6 @@ class VerifySubscriptionView(APIView):
             try:
                 razorpay_client.utility.verify_payment_signature(verification_payload)
             except razorpay.errors.SignatureVerificationError:
-                # Update existing pending record to FAILED status
                 Payment.objects.filter(razorpay_order_id=razorpay_order_id).update(status='FAILED')
                 return Response({"detail": "Cryptographic signature validation check failed."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -869,25 +747,24 @@ class VerifySubscriptionView(APIView):
             rzp_order = razorpay_client.order.fetch(razorpay_order_id)
             plan_type = rzp_order.get('notes', {}).get('plan_type', 'monthly_premium')
 
-            user.is_subscribed = True
+            if hasattr(user, 'is_subscribed'):
+                user.is_subscribed = True
 
-            # 🚀 UPDATE PRE-EXISTING PENDING ROW TO SUCCESS
             Payment.objects.filter(razorpay_order_id=razorpay_order_id).update(
                 status='SUCCESS',
                 razorpay_payment_id=razorpay_payment_id,
                 razorpay_signature=razorpay_signature
             )
             
-            if plan_type == 'starter_pack':
-                user.document_credits += 3  
-                plan_display_name = "Starter Pack"
-            else:
-                user.document_credits += 12  
-                plan_display_name = "Monthly Premium Pass"
+            credits_to_add = 3 if plan_type == 'starter_pack' else 12
+            plan_display_name = "Starter Pack" if plan_type == 'starter_pack' else "Monthly Premium Pass"
 
-            # Dynamically push expiration dates by 30 rolling calendar days
-            if user.subscription_expires_at and user.subscription_expires_at > timezone.now():
-                user.subscription_expires_at = user.subscription_expires_at + timedelta(days=30)
+            if hasattr(user, 'document_credits'):
+                user.document_credits += credits_to_add
+
+            sub_expires = getattr(user, 'subscription_expires_at', None)
+            if sub_expires and sub_expires > timezone.now():
+                user.subscription_expires_at = sub_expires + timedelta(days=30)
             else:
                 user.subscription_expires_at = timezone.now() + timedelta(days=30)
 
@@ -902,10 +779,8 @@ class VerifySubscriptionView(APIView):
             return Response({"status": "Subscription confirmed successfully"}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
 
 
-#Payment Model View
 class PaymentHistoryListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -925,13 +800,11 @@ class PaymentHistoryListView(APIView):
                 "razorpay_payment_id": payment.razorpay_payment_id if payment.razorpay_payment_id else "N/A",
                 "created_at": payment.created_at.strftime("%Y-%m-%d %H:%M"),
                 "status": payment.status,
-                "is_cancelled": getattr(payment, 'is_cancelled', False),  # 🚀 ADD THIS FIELD
+                "is_cancelled": getattr(payment, 'is_cancelled', False),
                 "filename": payment.document.filename if payment.document else "Subscription Plan"
             })
             
         return Response(data, status=status.HTTP_200_OK)
-    
-
 
 
 class LogPaymentFailureView(APIView):
@@ -959,16 +832,13 @@ class LogPaymentFailureView(APIView):
                 user=request.user,
                 title="⚠️ Payment Failed",
                 description=(
-                        f"Your checkout run for the {plan_type.replace('_', ' ').title()} pass was unsuccessful. "
-                        f"{'No credits were added.' if plan_type != 'PAY_AS_YOU_VERIFY' else 'No charges were made.'}"
-                    ),
+                    f"Your checkout run for the {plan_type.replace('_', ' ').title()} pass was unsuccessful. "
+                    f"{'No credits were added.' if plan_type != 'PAY_AS_YOU_VERIFY' else 'No charges were made.'}"
+                ),
                 is_read=False
             )
 
         return Response({"status": "Failure log and alert notification captured"}, status=status.HTTP_201_CREATED)
-    
-
-
 
 
 class PaymentDetailRetrieveView(RetrieveAPIView):

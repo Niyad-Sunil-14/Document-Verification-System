@@ -4,9 +4,18 @@ import Navbar from './Navbar';
 import axiosInstance from '../../../api/Axiosinstance';
 
 // -------------------------------------------------------------
+// HELPER FUNCTION: FORMAT ESTIMATED TIME
+// -------------------------------------------------------------
+const formatExpectedTime = (timeString) => {
+  if (!timeString) return '15-30 Minutes'; // Fallback default estimated window
+  const date = new Date(timeString);
+  return isNaN(date.getTime()) ? timeString : date.toLocaleString();
+};
+
+// -------------------------------------------------------------
 // SUB-COMPONENT: TIMELINE LIFECYCLE TRACKER
 // -------------------------------------------------------------
-function StatusTracker({ status = 'PENDING', uploadedAt = 'Recent' }) {
+function StatusTracker({ status = 'PENDING', uploadedAt = 'Recent', expectedTime }) {
   const steps = [
     {
       id: 1,
@@ -27,7 +36,9 @@ function StatusTracker({ status = 'PENDING', uploadedAt = 'Recent' }) {
     {
       id: 3,
       title: 'Verification Completed',
-      description: status === 'PENDING' ? 'Awaiting evaluation...' : 'Validation complete.',
+      description: status === 'PENDING' 
+        ? `Awaiting evaluation (Est: ${formatExpectedTime(expectedTime)})` 
+        : 'Validation complete.',
       isComplete: status !== 'PENDING',
       isCurrent: false, 
       color: status !== 'PENDING' ? 'border-violet-600 bg-violet-600 text-white dark:border-violet-500 dark:bg-violet-500' : 'border-slate-200 text-slate-400 bg-white dark:border-slate-700 dark:text-slate-500 dark:bg-slate-900',
@@ -43,7 +54,6 @@ function StatusTracker({ status = 'PENDING', uploadedAt = 'Recent' }) {
   ];
 
   return (
-    /* 🚀 FIXED: Status tracker panel handles dark layout surface backgrounds cleanly */
     <div className="bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 shadow-sm rounded-2xl p-6 sm:p-8 mb-8 transition-colors duration-200">
       <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-6">Real-Time Processing Lifecycle</h3>
       <div className="relative">
@@ -173,9 +183,11 @@ export default function DocumentDetails() {
   const isPdf = fileUrl.toLowerCase().includes('.pdf');
   const activeFileName = getDisplayFilename(fileUrl);
   const isRejected = document?.status === 'REJECTED';
+  
+  // Extract expected time field from API (adjust key if API uses `estimated_time` or `expected_completion`)
+  const expectedTime = document?.expected_completion || document?.estimated_time;
 
   return (
-    /* 🚀 FIXED: Dynamic wrapper background tracking dark theme adjustments */
     <div className="min-h-screen bg-slate-50/50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans antialiased transition-colors duration-200">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         
@@ -207,7 +219,8 @@ export default function DocumentDetails() {
           </div>
         )}
 
-        <StatusTracker status={document?.status} uploadedAt={document?.uploaded_at} />
+        {/* PASS EXPECTED TIME TO TRACKER */}
+        <StatusTracker status={document?.status} uploadedAt={document?.uploaded_at} expectedTime={expectedTime} />
 
         {/* DYNAMIC COMPLIANCE BLOCK: REMARKS INFO + INLINE RE-UPLOAD CONSOLE */}
         {isRejected && (
@@ -240,13 +253,18 @@ export default function DocumentDetails() {
           </div>
         )}
 
-        {/* METADATA OVERVIEW BAR */}
-        {/* 🚀 FIXED: Summary parameter strips follow light/dark border layout metrics */}
-        <div className="bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 shadow-sm rounded-2xl p-5 mb-8 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm font-semibold transition-colors duration-200">
+        {/* METADATA OVERVIEW BAR (EXPANDED TO 5 COLUMNS FOR EXPECTED TIME) */}
+        <div className="bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 shadow-sm rounded-2xl p-5 mb-8 grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm font-semibold transition-colors duration-200">
           <div><span className="text-xs text-gray-400 dark:text-slate-400 block font-medium">Document Type</span><span className="text-slate-800 dark:text-slate-200 uppercase font-mono text-xs block mt-1">{document?.document_type || 'NOT SPECIFIED'}</span></div>
           <div><span className="text-xs text-gray-400 block font-medium">ID Reference</span><span className="text-slate-700 dark:text-slate-300 font-mono text-xs block mt-1">#{document?.id}</span></div>
           <div><span className="text-xs text-gray-400 block font-medium">Current Status</span><div className="mt-1"><span className={getStatusBadge(document?.status)}>{document?.status}</span></div></div>
           <div><span className="text-xs text-gray-400 block font-medium">Uploaded Date</span><span className="text-slate-600 dark:text-slate-400 block text-xs mt-1 truncate">{document?.uploaded_at || 'Recent'}</span></div>
+          <div>
+            <span className="text-xs text-gray-400 block font-medium">Expected Time</span>
+            <span className="text-violet-600 dark:text-violet-400 font-semibold block text-xs mt-1 truncate">
+              {document?.status === 'PENDING' ? formatExpectedTime(expectedTime) : 'Completed'}
+            </span>
+          </div>
         </div>
 
         {/* CORE WORKSPACE */}

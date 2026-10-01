@@ -120,7 +120,7 @@ export default function AdminDocumentDetails() {
         )}
 
         {/* METADATA REGISTRY OVERVIEW GRID */}
-        <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-5 mb-8 grid grid-cols-2 md:grid-cols-5 gap-4 text-sm font-semibold">
+        <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-5 mb-8 grid grid-cols-2 md:grid-cols-6 gap-4 text-sm font-semibold">
           <div>
             <span className="text-xs text-gray-400 block font-medium">Username</span>
             <span className="text-slate-800 font-bold block mt-1 truncate">{document?.username || 'Unknown User'}</span>
@@ -155,6 +155,18 @@ export default function AdminDocumentDetails() {
             <div className="mt-1 flex items-center space-x-1.5">
               <span className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold border ${getAccuracyBadgeStyles(document?.ocr_accuracy)}`}>
                 {document?.ocr_accuracy ? `${document.ocr_accuracy}%` : '0.0%'}
+              </span>
+            </div>
+          </div>
+          <div>
+            <span className="text-xs text-gray-400 block font-medium">Decision Source</span>
+            <div className="mt-1">
+              <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${
+                document?.auto_verified
+                  ? 'bg-violet-50 text-violet-700 border-violet-200'
+                  : 'bg-slate-50 text-slate-600 border-slate-200'
+              }`}>
+                {document?.auto_verified ? '🤖 Auto-Verified' : '🧑 Manual Review'}
               </span>
             </div>
           </div>
@@ -252,6 +264,9 @@ export default function AdminDocumentDetails() {
               <p className="text-[11px] text-slate-300 leading-relaxed font-medium">
                 Review extracted data pools against file originals before making a compliance evaluation. 
                 Saving remarks independently allows notes to be captured during ongoing auditing phases without changing active system permissions.
+                {document?.auto_verified && (
+                  <> This document's current status was set automatically by the verification engine — approving or rejecting it here will mark it as manually reviewed.</>
+                )}
               </p>
             </div>
           </div>
