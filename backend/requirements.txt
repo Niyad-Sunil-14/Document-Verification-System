@@ -60,3 +60,5 @@ urllib3==2.7.0
 websockets==16.1
 redis
 django-redis
+paddlepaddle>=3.0.0
+paddleocr>=2.7.3

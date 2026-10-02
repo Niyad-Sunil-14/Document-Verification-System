@@ -1,9 +1,7 @@
-import gc
 import os
 import json
 import logging
 import tempfile
-import threading
 from datetime import timedelta
 
 from concurrent.futures import ThreadPoolExecutor
@@ -16,18 +14,13 @@ from .utils import (
     OCRServiceError,
 )
 
-import cv2
-import numpy as np
-import pytesseract
-from PIL import Image
-from pdf2image import convert_from_path
 import razorpay
 import cloudinary
 import cloudinary.uploader
 import environ
 
 from django.conf import settings
-from django.db import transaction, connection, close_old_connections
+from django.db import transaction, close_old_connections
 from django.db.models import Count, Q
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -52,7 +45,7 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 env = environ.Env()
 
-ocr_executor = ThreadPoolExecutor(max_workers=3)
+ocr_executor = ThreadPoolExecutor(max_workers=1)
 
 # Initialize Razorpay Client cleanly before view usages
 razorpay_client = razorpay.Client(

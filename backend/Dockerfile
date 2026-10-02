@@ -1,29 +1,24 @@
-# 🚀 FIXED: Upgraded base image to Python 3.12 to support Django 6.x requirements
 FROM python:3.12-slim
 
-# Force apt-get to run completely unattended without looking for prompts
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True
 
-# Clean up package targets and pull modern Debian dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    tesseract-ocr \
-    poppler-utils \
     libgl1 \
     libglib2.0-0 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up the operational workspace container path
 WORKDIR /app
 
-# Install dependencies directly into the Docker environment
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all application files over
+# Download models at build time so the first upload isn't slow
+RUN python -c "from paddleocr import PaddleOCR; PaddleOCR(text_detection_model_name='PP-OCRv5_mobile_det', text_recognition_model_name='PP-OCRv5_mobile_rec', use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False)"
+
 COPY . .
 
-# Run database migrations and collect static files automatically on container startup
-# Then hand off request traffic handling to Gunicorn
-CMD python manage.py migrate && python manage.py collectstatic --noinput && gunicorn DVS.wsgi:application --bind 0.0.0.0:$PORT
-
-
+# 1 worker + threads: the model is loaded once, not once per worker
+CMD python manage.py migrate && python manage.py collectstatic --noinput && \
+    gunicorn DVS.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120
