@@ -1,9 +1,20 @@
+import gc
 import os
 import json
 import logging
 import tempfile
 import threading
 from datetime import timedelta
+
+from concurrent.futures import ThreadPoolExecutor
+from .utils import (
+    extract_text_from_pdf,
+    extract_ocr_text,
+    extract_ocr_text_from_scanned_pdf,
+    evaluate_document_verification,
+    estimate_processing_time,
+    OCRServiceError,
+)
 
 import cv2
 import numpy as np
@@ -37,15 +48,11 @@ from .serializers import (
     DocumentUploadSerializer,
     NotificationSerializer
 )
-from .utils import (
-    extract_text_from_pdf, 
-    extract_ocr_text, 
-    evaluate_document_verification, 
-    estimate_processing_time
-)
 
 logger = logging.getLogger(__name__)
 env = environ.Env()
+
+ocr_executor = ThreadPoolExecutor(max_workers=3)
 
 # Initialize Razorpay Client cleanly before view usages
 razorpay_client = razorpay.Client(
@@ -58,10 +65,12 @@ razorpay_client = razorpay.Client(
 
 def process_ocr_in_background(document_id, temp_file_path, is_pdf):
     """
-    Background Thread Worker:
-    - Closes old/stale connections to prevent DB operational timeouts inside thread execution.
-    - Performs OCR text extraction (handling both digital and scanned PDF conversions).
-    - Evaluates verification rules, updates Document record, and notifies the user.
+    Background Worker (runs in ocr_executor):
+    - Closes old/stale DB connections so the worker thread doesn't hit stale-connection errors.
+    - Extracts text: digital PDFs via pdfplumber, scanned PDFs and images via Gemini.
+    - If the OCR provider fails, leaves the document PENDING for manual review and records
+      the exact error in `remarks` (visible in the admin panel).
+    - Otherwise evaluates verification rules, updates the Document, and notifies the user.
     """
     close_old_connections()
     try:
@@ -69,42 +78,61 @@ def process_ocr_in_background(document_id, temp_file_path, is_pdf):
         extracted_text = ""
         accuracy_score = 0.0
         ocr_pipeline_status = "FAILED"
+        ocr_service_down = False
+        ocr_error_detail = ""
 
         # -------------------------------------------------------------
         # TEXT EXTRACTION PHASE
         # -------------------------------------------------------------
-        if is_pdf:
-            extracted_text = extract_text_from_pdf(temp_file_path)
-            if extracted_text.strip():
-                ocr_pipeline_status = "PROCESSED"
-                accuracy_score = 95.0
-            else:
-                # Scanned PDF fallback using pdf2image -> pytesseract
-                try:
-                    images = convert_from_path(temp_file_path)
-                    combined_text = ""
-                    confidences = []
-                    
-                    for img in images:
-                        data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
-                        combined_text += pytesseract.image_to_string(img) + "\n"
-                        confidences.extend([int(c) for c in data['conf'] if int(c) > 0])
-                        
-                    extracted_text = combined_text.strip()
-                    accuracy_score = float(np.mean(confidences)) if confidences else 50.0
+        try:
+            if is_pdf:
+                # 1. Digital PDF: embedded text, free and instant
+                extracted_text = extract_text_from_pdf(temp_file_path)
+                if extracted_text.strip():
+                    ocr_pipeline_status = "PROCESSED"
+                    accuracy_score = 95.0
+                else:
+                    # 2. Scanned PDF: Gemini reads the PDF directly
+                    result = extract_ocr_text_from_scanned_pdf(temp_file_path)
+                    extracted_text = result["extracted_text"]
+                    accuracy_score = result["confidence"]
                     ocr_pipeline_status = "PROCESSED" if extracted_text else "FAILED"
-                except Exception as pdf_ocr_err:
-                    logger.error(f"Scanned PDF OCR failed: {pdf_ocr_err}")
-        else:
-            # Use extract_ocr_text directly for image uploads
-            ocr_result = extract_ocr_text(
-                image_input=temp_file_path,
-                psm=11,
-                whitelist='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/:.- '
+            else:
+                # 3. Image upload
+                result = extract_ocr_text(temp_file_path)
+                extracted_text = result["extracted_text"]
+                accuracy_score = result["confidence"]
+                ocr_pipeline_status = "PROCESSED" if extracted_text else "FAILED"
+
+        except OCRServiceError as svc_err:
+            # Provider problem (wrong model, bad key, quota, timeout, blocked): our side, not the user's
+            logger.error(f"OCR provider error for document {document_id}: {svc_err}")
+            ocr_service_down = True
+            ocr_error_detail = str(svc_err)[:400]
+        except ValueError as img_err:
+            # Unreadable / corrupted image file: genuine document failure
+            logger.error(f"Image decode failed for document {document_id}: {img_err}")
+            ocr_pipeline_status = "FAILED"
+            ocr_error_detail = str(img_err)[:400]
+
+        # -------------------------------------------------------------
+        # OUTAGE PATH: keep PENDING for manual review, notify, and stop
+        # -------------------------------------------------------------
+        if ocr_service_down:
+            doc.ocr_status = "FAILED"
+            doc.status = "PENDING"
+            doc.remarks = f"OCR service error: {ocr_error_detail}"
+            doc.auto_verified = False
+            doc.save()
+
+            Notification.objects.create(
+                user=doc.user,
+                title="Document Queued for Manual Review",
+                description=f"Automatic scanning of '{doc.filename}' was unavailable, so it has been sent to our team for manual review.",
+                document=doc,
+                is_read=False
             )
-            extracted_text = ocr_result["extracted_text"]
-            accuracy_score = ocr_result["confidence"]
-            ocr_pipeline_status = "PROCESSED" if extracted_text else "FAILED"
+            return
 
         # -------------------------------------------------------------
         # VERIFICATION EVALUATION ENGINE
@@ -115,6 +143,9 @@ def process_ocr_in_background(document_id, temp_file_path, is_pdf):
             ocr_accuracy=accuracy_score,
             pipeline_status=ocr_pipeline_status
         )
+
+        if ocr_pipeline_status == "FAILED" and ocr_error_detail:
+            remarks = f"{remarks} Detail: {ocr_error_detail}"
 
         # -------------------------------------------------------------
         # DATABASE UPDATE & NOTIFICATION
@@ -136,7 +167,7 @@ def process_ocr_in_background(document_id, temp_file_path, is_pdf):
         )
 
     except Exception as e:
-        logger.error(f"Error in OCR background processing thread: {str(e)}")
+        logger.error(f"Error in OCR background processing: {str(e)}")
         try:
             doc = Document.objects.get(id=document_id)
             doc.ocr_status = "FAILED"
@@ -217,10 +248,7 @@ class DocumentUploadView(APIView):
                 payment_verified=True
             )
 
-            threading.Thread(
-                target=process_ocr_in_background,
-                args=(document.id, temp_filename, is_pdf_file)
-            ).start()
+            ocr_executor.submit(process_ocr_in_background, document.id, temp_filename, is_pdf_file)
 
             return Response(
                 {
@@ -387,10 +415,7 @@ class DocumentDetailView(APIView):
                     document=document
                 )
 
-                threading.Thread(
-                    target=process_ocr_in_background,
-                    args=(document.id, temp_filename, is_pdf_file)
-                ).start()
+                ocr_executor.submit(process_ocr_in_background, document.id, temp_filename, is_pdf_file)
 
                 serializer = DocumentDetailSerializer(document, context={'request': request})
                 return Response(serializer.data, status=status.HTTP_200_OK)

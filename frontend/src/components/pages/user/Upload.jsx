@@ -45,13 +45,14 @@ export default function Upload() {
     }
   };
 
-  // Helper function to compress images before upload
+  // Helper function to compress images before upload while preserving OCR quality
   const getPreparedFile = async (rawFile) => {
     if (!isPdf && rawFile.type.startsWith('image/')) {
       const options = {
-        maxSizeMB: 0.8,
-        maxWidthOrHeight: 1920,
+        maxSizeMB: 2.0,          // Preserves resolution for OCR text extraction
+        maxWidthOrHeight: 2560,  // Prevents blurring on small fonts
         useWebWorker: true,
+        initialQuality: 0.9,
       };
       try {
         return await imageCompression(rawFile, options);
@@ -81,7 +82,8 @@ export default function Upload() {
         const fileToUpload = await getPreparedFile(file);
 
         const formData = new FormData();
-        formData.append('file', fileToUpload);
+        // Pass original file.name so Django recognizes the extension correctly
+        formData.append('file', fileToUpload, file.name);
         formData.append('document_type', documentType);
         formData.append('use_credit', 'true');
 
@@ -147,7 +149,8 @@ export default function Upload() {
             const fileToUpload = await getPreparedFile(file);
 
             const formData = new FormData();
-            formData.append('file', fileToUpload);
+            // Pass original file.name so Django recognizes the extension correctly
+            formData.append('file', fileToUpload, file.name);
             formData.append('document_type', documentType);
             formData.append('razorpay_payment_id', paymentInfo.razorpay_payment_id);
             formData.append('razorpay_order_id', paymentInfo.razorpay_order_id);

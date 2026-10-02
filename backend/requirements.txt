@@ -31,7 +31,6 @@ numpy==2.4.6
 opencv-python==4.13.0.92
 packaging==26.2
 pandas==3.0.3
-pdf2image==1.17.0
 pdfminer.six==20251230
 pdfplumber==0.11.9
 pillow==12.2.0
@@ -43,7 +42,6 @@ pydantic==2.13.4
 pydantic_core==2.46.4
 PyJWT==2.12.1
 pypdfium2==5.9.0
-pytesseract==0.3.13
 python-dateutil==2.9.0.post0
 PyYAML==6.0.3
 razorpay==2.0.1
